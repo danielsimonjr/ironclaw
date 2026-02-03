@@ -96,16 +96,15 @@ impl NearAiProvider {
             });
         }
 
-        // Try to parse as JSON, but the API might return plain text
+        // Try to parse as our expected type
         match serde_json::from_str::<R>(&response_text) {
             Ok(parsed) => Ok(parsed),
             Err(e) => {
                 tracing::debug!("Response is not expected JSON format: {}", e);
-                // If it's not valid JSON for our expected type, it might be a raw string response
-                // We'll handle this in the caller
+                tracing::debug!("Will try alternative parsing in caller");
                 Err(LlmError::InvalidResponse {
                     provider: "nearai".to_string(),
-                    reason: format!("Unexpected response format. Raw: {}", response_text),
+                    reason: format!("Parse error: {}. Raw: {}", e, response_text),
                 })
             }
         }
@@ -126,16 +125,28 @@ impl LlmProvider for NearAiProvider {
             tools: None,
         };
 
-        // Try to get structured response, fall back to raw text
+        // Try to get structured response, fall back to alternative formats
         let response: NearAiResponse = match self.send_request("responses", &request).await {
             Ok(r) => r,
-            Err(LlmError::InvalidResponse { reason, .. })
-                if reason.starts_with("Unexpected response format. Raw: ") =>
-            {
-                // API returned plain text instead of JSON structure
-                let raw_text = reason
-                    .strip_prefix("Unexpected response format. Raw: ")
-                    .unwrap_or("");
+            Err(LlmError::InvalidResponse { reason, .. }) if reason.contains("Raw: ") => {
+                // Extract the raw JSON from the error
+                let raw_text = reason.split("Raw: ").nth(1).unwrap_or("");
+
+                // Try parsing as alternative response format
+                if let Ok(alt) = serde_json::from_str::<NearAiAltResponse>(raw_text) {
+                    tracing::info!("NEAR AI returned alternative response format");
+                    let text = extract_text_from_output(&alt.output);
+                    let usage = alt.usage.unwrap_or(NearAiUsage {
+                        input_tokens: 0,
+                        output_tokens: 0,
+                    });
+                    return Ok(CompletionResponse {
+                        content: text,
+                        finish_reason: FinishReason::Stop,
+                        input_tokens: usage.input_tokens,
+                        output_tokens: usage.output_tokens,
+                    });
+                }
 
                 // Check if it's a JSON string (quoted)
                 let text = if raw_text.starts_with('"') {
@@ -241,16 +252,28 @@ impl LlmProvider for NearAiProvider {
             tools: if tools.is_empty() { None } else { Some(tools) },
         };
 
-        // Try to get structured response, fall back to raw text
+        // Try to get structured response, fall back to alternative formats
         let response: NearAiResponse = match self.send_request("responses", &request).await {
             Ok(r) => r,
-            Err(LlmError::InvalidResponse { reason, .. })
-                if reason.starts_with("Unexpected response format. Raw: ") =>
-            {
-                // API returned plain text instead of JSON structure
-                let raw_text = reason
-                    .strip_prefix("Unexpected response format. Raw: ")
-                    .unwrap_or("");
+            Err(LlmError::InvalidResponse { reason, .. }) if reason.contains("Raw: ") => {
+                let raw_text = reason.split("Raw: ").nth(1).unwrap_or("");
+
+                // Try parsing as alternative response format
+                if let Ok(alt) = serde_json::from_str::<NearAiAltResponse>(raw_text) {
+                    tracing::info!("NEAR AI returned alternative response format (tool request)");
+                    let text = extract_text_from_output(&alt.output);
+                    let usage = alt.usage.unwrap_or(NearAiUsage {
+                        input_tokens: 0,
+                        output_tokens: 0,
+                    });
+                    return Ok(ToolCompletionResponse {
+                        content: if text.is_empty() { None } else { Some(text) },
+                        tool_calls: vec![],
+                        finish_reason: FinishReason::Stop,
+                        input_tokens: usage.input_tokens,
+                        output_tokens: usage.output_tokens,
+                    });
+                }
 
                 let text = if raw_text.starts_with('"') {
                     serde_json::from_str::<String>(raw_text)
@@ -382,12 +405,28 @@ struct NearAiTool {
     parameters: Option<serde_json::Value>,
 }
 
+/// Primary response format (output array style)
 #[derive(Debug, Deserialize)]
 struct NearAiResponse {
     #[allow(dead_code)]
     id: String,
     output: Vec<NearAiOutputItem>,
     usage: NearAiUsage,
+}
+
+/// Alternative response format (OpenAI-compatible style)
+#[derive(Debug, Deserialize)]
+struct NearAiAltResponse {
+    #[allow(dead_code)]
+    id: String,
+    #[allow(dead_code)]
+    object: Option<String>,
+    #[allow(dead_code)]
+    status: Option<String>,
+    /// The actual output content
+    output: Option<serde_json::Value>,
+    /// Usage stats
+    usage: Option<NearAiUsage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -425,6 +464,64 @@ struct NearAiUsage {
 #[derive(Debug, Deserialize)]
 struct NearAiErrorResponse {
     error: String,
+}
+
+/// Extract text content from various output formats.
+fn extract_text_from_output(output: &Option<serde_json::Value>) -> String {
+    let Some(output) = output else {
+        return String::new();
+    };
+
+    // If output is a string, return it directly
+    if let Some(s) = output.as_str() {
+        return s.to_string();
+    }
+
+    // If output is an array, try to extract text from items
+    if let Some(arr) = output.as_array() {
+        let texts: Vec<String> = arr
+            .iter()
+            .filter_map(|item| {
+                // Check for direct text field
+                if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                    return Some(text.to_string());
+                }
+                // Check for content array with text
+                if let Some(content) = item.get("content").and_then(|c| c.as_array()) {
+                    let content_texts: Vec<String> = content
+                        .iter()
+                        .filter_map(|c| c.get("text").and_then(|t| t.as_str()).map(String::from))
+                        .collect();
+                    if !content_texts.is_empty() {
+                        return Some(content_texts.join(""));
+                    }
+                }
+                // Check for content as string
+                if let Some(content) = item.get("content").and_then(|c| c.as_str()) {
+                    return Some(content.to_string());
+                }
+                None
+            })
+            .collect();
+        return texts.join("");
+    }
+
+    // If output is an object, try common fields
+    if let Some(obj) = output.as_object() {
+        if let Some(text) = obj.get("text").and_then(|t| t.as_str()) {
+            return text.to_string();
+        }
+        if let Some(content) = obj.get("content").and_then(|c| c.as_str()) {
+            return content.to_string();
+        }
+        if let Some(message) = obj.get("message").and_then(|m| m.as_str()) {
+            return message.to_string();
+        }
+    }
+
+    // Fallback: return JSON representation
+    tracing::warn!("Could not extract text from output: {:?}", output);
+    output.to_string()
 }
 
 #[cfg(test)]
