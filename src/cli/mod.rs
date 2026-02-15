@@ -15,7 +15,14 @@
 //! - Log querying (`logs tail`, `logs search`, `logs job`)
 //! - Message sending (`message send`)
 //! - Shell completion generation (`completion`)
+//! - Channel management (`channels list`, `channels status`, `channels enable`)
+//! - Plugin management (`plugins list`, `plugins install`, `plugins remove`)
+//! - Webhook management (`webhooks list`, `webhooks add`, `webhooks remove`)
+//! - Skills management (`skills list`, `skills enable`, `skills disable`)
+//! - Agent management (`agents list`, `agents info`, `agents set-default`)
 
+mod agents;
+mod channels;
 mod completion;
 mod config;
 mod cron;
@@ -27,10 +34,16 @@ mod mcp;
 pub mod memory;
 mod message;
 mod pairing;
+mod plugins;
+mod service;
 mod sessions;
+mod skills;
 pub mod status;
 mod tool;
+mod webhooks;
 
+pub use agents::{AgentsCommand, run_agents_command};
+pub use channels::{ChannelsCommand, run_channels_command};
 pub use completion::generate_completions;
 pub use config::{ConfigCommand, run_config_command};
 pub use cron::{CronCommand, run_cron_command};
@@ -45,9 +58,16 @@ pub use memory::run_memory_command;
 pub use memory::run_memory_command_with_db;
 pub use message::{MessageCommand, run_message_command};
 pub use pairing::{PairingCommand, run_pairing_command, run_pairing_command_with_store};
+pub use plugins::{PluginsCommand, run_plugins_command};
+pub use service::{
+    ServiceConfig, ServiceError, ServiceGenerator, generate_launchd_plist, generate_systemd_unit,
+    install_launchd, install_systemd,
+};
 pub use sessions::{SessionsCommand, run_sessions_command};
+pub use skills::{SkillsCommand, run_skills_command};
 pub use status::run_status_command;
 pub use tool::{ToolCommand, run_tool_command};
+pub use webhooks::{WebhooksCommand, run_webhooks_command};
 
 use clap::{Parser, Subcommand};
 
@@ -147,6 +167,26 @@ pub enum Command {
     /// Send messages to channels
     #[command(subcommand)]
     Message(MessageCommand),
+
+    /// Manage input channels (telegram, slack, webchat, etc.)
+    #[command(subcommand)]
+    Channels(ChannelsCommand),
+
+    /// Manage plugins (WASM tools and MCP servers)
+    #[command(subcommand)]
+    Plugins(PluginsCommand),
+
+    /// Manage outbound webhooks
+    #[command(subcommand)]
+    Webhooks(WebhooksCommand),
+
+    /// Manage skills (capability bundles)
+    #[command(subcommand)]
+    Skills(SkillsCommand),
+
+    /// Manage agent identities
+    #[command(subcommand)]
+    Agents(AgentsCommand),
 
     /// Generate shell completion scripts
     Completion {

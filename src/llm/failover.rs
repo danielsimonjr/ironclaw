@@ -134,7 +134,7 @@ impl FailoverProvider {
         let states = self.states.read().await;
         self.providers
             .iter()
-            .filter(|p| states.get(&p.name).map_or(true, |s| s.is_available()))
+            .filter(|p| states.get(&p.name).is_none_or(|s| s.is_available()))
             .map(|p| p.name.clone())
             .collect()
     }
@@ -149,7 +149,7 @@ impl FailoverProvider {
                 let (requests, errors) = state
                     .map(|s| (s.total_requests, s.total_errors))
                     .unwrap_or((0, 0));
-                let available = state.map_or(true, |s| s.is_available());
+                let available = state.is_none_or(|s| s.is_available());
                 (p.name.clone(), (requests, errors, available))
             })
             .collect()
@@ -160,7 +160,7 @@ impl FailoverProvider {
         let states = self.states.read().await;
         self.providers
             .iter()
-            .find(|p| states.get(&p.name).map_or(true, |s| s.is_available()))
+            .find(|p| states.get(&p.name).is_none_or(|s| s.is_available()))
     }
 
     /// Record success for a provider.
@@ -204,7 +204,7 @@ impl LlmProvider for FailoverProvider {
         let available: Vec<_> = self
             .providers
             .iter()
-            .filter(|p| states.get(&p.name).map_or(true, |s| s.is_available()))
+            .filter(|p| states.get(&p.name).is_none_or(|s| s.is_available()))
             .collect();
         drop(states);
 
@@ -243,7 +243,7 @@ impl LlmProvider for FailoverProvider {
         let available: Vec<_> = self
             .providers
             .iter()
-            .filter(|p| states.get(&p.name).map_or(true, |s| s.is_available()))
+            .filter(|p| states.get(&p.name).is_none_or(|s| s.is_available()))
             .collect();
         drop(states);
 

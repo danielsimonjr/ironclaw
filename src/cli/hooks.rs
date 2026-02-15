@@ -103,10 +103,10 @@ async fn list_hooks(type_filter: Option<String>) -> anyhow::Result<()> {
 
     for hook in &hooks {
         let type_str = hook.hook_type.to_string();
-        if let Some(ref filter) = type_filter {
-            if !type_str.contains(filter) {
-                continue;
-            }
+        if let Some(ref filter) = type_filter
+            && !type_str.contains(filter)
+        {
+            continue;
         }
 
         let status = if hook.enabled { "enabled" } else { "disabled" };

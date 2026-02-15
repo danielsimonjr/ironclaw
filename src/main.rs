@@ -325,6 +325,61 @@ async fn main() -> anyhow::Result<()> {
 
             return ironclaw::cli::run_message_command(msg_cmd.clone()).await;
         }
+        Some(Command::Channels(channels_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_channels_command(channels_cmd)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
+        Some(Command::Plugins(plugins_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_plugins_command(plugins_cmd)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
+        Some(Command::Webhooks(webhooks_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_webhooks_command(webhooks_cmd)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
+        Some(Command::Skills(skills_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_skills_command(skills_cmd)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
+        Some(Command::Agents(agents_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_agents_command(agents_cmd)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
         Some(Command::Completion { shell }) => {
             return ironclaw::cli::generate_completions(shell);
         }

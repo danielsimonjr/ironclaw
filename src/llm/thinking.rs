@@ -10,10 +10,12 @@ use serde::{Deserialize, Serialize};
 /// Thinking/reasoning mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ThinkingMode {
     /// Fast responses, minimal reasoning. Best for simple queries.
     Low,
     /// Balanced reasoning with tool use. Default mode.
+    #[default]
     Medium,
     /// Deep reasoning with planning phase. Best for complex tasks.
     High,
@@ -74,12 +76,6 @@ impl ThinkingMode {
                 "Think carefully and thoroughly about this task. Break down complex problems step by step. Consider multiple approaches before choosing the best one."
             }
         }
-    }
-}
-
-impl Default for ThinkingMode {
-    fn default() -> Self {
-        Self::Medium
     }
 }
 

@@ -73,17 +73,17 @@ impl HookEngine {
     /// List hooks for a specific type.
     pub async fn list_hooks_by_type(&self, hook_type: HookType) -> Vec<Hook> {
         let hooks = self.hooks.read().await;
-        hooks.get(&hook_type).map(|v| v.clone()).unwrap_or_default()
+        hooks.get(&hook_type).cloned().unwrap_or_default()
     }
 
     /// Enable or disable a hook.
     pub async fn set_enabled(&self, hook_type: HookType, name: &str, enabled: bool) -> bool {
         let mut hooks = self.hooks.write().await;
-        if let Some(entry) = hooks.get_mut(&hook_type) {
-            if let Some(hook) = entry.iter_mut().find(|h| h.name == name) {
-                hook.enabled = enabled;
-                return true;
-            }
+        if let Some(entry) = hooks.get_mut(&hook_type)
+            && let Some(hook) = entry.iter_mut().find(|h| h.name == name)
+        {
+            hook.enabled = enabled;
+            return true;
         }
         false
     }

@@ -72,10 +72,10 @@ async fn send_message(
 
         if response.status().is_success() {
             println!("Message sent to {} channel.", channel);
-            if let Ok(body) = response.json::<serde_json::Value>().await {
-                if let Some(id) = body.get("message_id") {
-                    println!("  Message ID: {}", id);
-                }
+            if let Ok(body) = response.json::<serde_json::Value>().await
+                && let Some(id) = body.get("message_id")
+            {
+                println!("  Message ID: {}", id);
             }
         } else {
             let status = response.status();

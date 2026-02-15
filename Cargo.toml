@@ -61,6 +61,9 @@ async-trait = "0.1"
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 
+# Compression (gzip for TGS sticker decompression)
+flate2 = "1"
+
 # URL parsing
 url = "2"
 

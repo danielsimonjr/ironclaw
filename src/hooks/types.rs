@@ -56,22 +56,17 @@ impl fmt::Display for HookType {
 }
 
 /// Priority level for hook execution ordering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum HookPriority {
     /// Runs first (system-level hooks).
     System = 0,
     /// Runs early (important plugins).
     High = 10,
     /// Default priority.
+    #[default]
     Normal = 50,
     /// Runs late (logging, analytics).
     Low = 90,
-}
-
-impl Default for HookPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 /// Where the hook originates from.

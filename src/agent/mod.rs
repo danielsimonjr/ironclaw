@@ -11,9 +11,11 @@
 //! - Context compaction for long conversations
 
 mod agent_loop;
+pub mod auth_profiles;
 pub mod compaction;
 pub mod context_monitor;
 mod heartbeat;
+pub mod multi_agent;
 mod router;
 pub mod routine;
 pub mod routine_engine;
@@ -32,6 +34,7 @@ pub use agent_loop::{Agent, AgentDeps};
 pub use compaction::{CompactionResult, ContextCompactor};
 pub use context_monitor::{CompactionStrategy, ContextBreakdown, ContextMonitor};
 pub use heartbeat::{HeartbeatConfig, HeartbeatResult, HeartbeatRunner, spawn_heartbeat};
+pub use multi_agent::{AgentIdentity, AgentRouter, RoutingDecision, RoutingStrategy};
 pub use router::{MessageIntent, Router};
 pub use routine::{Routine, RoutineAction, RoutineRun, Trigger};
 pub use routine_engine::RoutineEngine;

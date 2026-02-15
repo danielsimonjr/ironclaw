@@ -48,7 +48,7 @@ pub struct ToolPolicy {
 }
 
 /// Skill-level configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillConfig {
     /// Maximum concurrent tool calls for this skill.
     pub max_concurrent: Option<u32>,
@@ -56,16 +56,6 @@ pub struct SkillConfig {
     pub timeout_secs: Option<u64>,
     /// Custom metadata.
     pub metadata: HashMap<String, serde_json::Value>,
-}
-
-impl Default for SkillConfig {
-    fn default() -> Self {
-        Self {
-            max_concurrent: None,
-            timeout_secs: None,
-            metadata: HashMap::new(),
-        }
-    }
 }
 
 /// Status of a skill.
