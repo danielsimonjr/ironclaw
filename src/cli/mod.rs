@@ -7,22 +7,45 @@
 //! - Managing WASM tools (`tool install`, `tool list`, `tool remove`)
 //! - Managing MCP servers (`mcp add`, `mcp auth`, `mcp list`, `mcp test`)
 //! - Querying workspace memory (`memory search`, `memory read`, `memory write`)
-//! - Checking system health (`status`)
+//! - Checking system health (`status`, `doctor`)
+//! - Gateway management (`gateway start`, `gateway stop`, `gateway status`)
+//! - Session management (`sessions list`, `sessions prune`)
+//! - Hook management (`hooks list`, `hooks add`, `hooks remove`)
+//! - Cron/routine management (`cron list`, `cron enable`, `cron history`)
+//! - Log querying (`logs tail`, `logs search`, `logs job`)
+//! - Message sending (`message send`)
+//! - Shell completion generation (`completion`)
 
+mod completion;
 mod config;
+mod cron;
+mod doctor;
+mod gateway;
+mod hooks;
+mod logs;
 mod mcp;
 pub mod memory;
+mod message;
 mod pairing;
+mod sessions;
 pub mod status;
 mod tool;
 
+pub use completion::generate_completions;
 pub use config::{ConfigCommand, run_config_command};
+pub use cron::{CronCommand, run_cron_command};
+pub use doctor::run_doctor_command;
+pub use gateway::{GatewayCommand, run_gateway_command};
+pub use hooks::{HooksCommand, run_hooks_command};
+pub use logs::{LogsCommand, run_logs_command};
 pub use mcp::{McpCommand, run_mcp_command};
 pub use memory::MemoryCommand;
 #[cfg(feature = "postgres")]
 pub use memory::run_memory_command;
 pub use memory::run_memory_command_with_db;
+pub use message::{MessageCommand, run_message_command};
 pub use pairing::{PairingCommand, run_pairing_command, run_pairing_command_with_store};
+pub use sessions::{SessionsCommand, run_sessions_command};
 pub use status::run_status_command;
 pub use tool::{ToolCommand, run_tool_command};
 
@@ -97,6 +120,46 @@ pub enum Command {
 
     /// Show system health and diagnostics
     Status,
+
+    /// Run comprehensive diagnostics
+    Doctor,
+
+    /// Manage the web gateway
+    #[command(subcommand)]
+    Gateway(GatewayCommand),
+
+    /// Manage sessions
+    #[command(subcommand)]
+    Sessions(SessionsCommand),
+
+    /// Manage lifecycle hooks
+    #[command(subcommand)]
+    Hooks(HooksCommand),
+
+    /// Manage scheduled routines (cron jobs)
+    #[command(subcommand)]
+    Cron(CronCommand),
+
+    /// Query and search logs
+    #[command(subcommand)]
+    Logs(LogsCommand),
+
+    /// Send messages to channels
+    #[command(subcommand)]
+    Message(MessageCommand),
+
+    /// Generate shell completion scripts
+    Completion {
+        /// Shell to generate completions for (bash, zsh, fish, powershell, elvish)
+        shell: String,
+    },
+
+    /// Self-update to the latest version
+    Update {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+    },
 
     /// Run as a sandboxed worker inside a Docker container (internal use).
     /// This is invoked automatically by the orchestrator, not by users directly.

@@ -8,13 +8,16 @@
 //! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI API
 
 mod costs;
+pub mod failover;
 mod nearai;
 mod nearai_chat;
 mod provider;
 mod reasoning;
 mod rig_adapter;
 pub mod session;
+pub mod thinking;
 
+pub use failover::FailoverProvider;
 pub use nearai::{ModelInfo, NearAiProvider};
 pub use nearai_chat::NearAiChatProvider;
 pub use provider::{
@@ -27,6 +30,7 @@ pub use reasoning::{
 };
 pub use rig_adapter::RigAdapter;
 pub use session::{SessionConfig, SessionManager, create_session_manager};
+pub use thinking::ThinkingMode;
 
 use std::sync::Arc;
 

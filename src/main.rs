@@ -262,6 +262,86 @@ async fn main() -> anyhow::Result<()> {
             }
             return Ok(());
         }
+        Some(Command::Doctor) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_doctor_command().await;
+        }
+        Some(Command::Gateway(gateway_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_gateway_command(gateway_cmd.clone()).await;
+        }
+        Some(Command::Sessions(sessions_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_sessions_command(sessions_cmd.clone()).await;
+        }
+        Some(Command::Hooks(hooks_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_hooks_command(hooks_cmd.clone()).await;
+        }
+        Some(Command::Cron(cron_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_cron_command(cron_cmd.clone()).await;
+        }
+        Some(Command::Logs(logs_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_logs_command(logs_cmd.clone()).await;
+        }
+        Some(Command::Message(msg_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_message_command(msg_cmd.clone()).await;
+        }
+        Some(Command::Completion { shell }) => {
+            return ironclaw::cli::generate_completions(shell);
+        }
+        Some(Command::Update { check }) => {
+            if *check {
+                println!("Checking for updates...");
+                println!("Current version: {}", env!("CARGO_PKG_VERSION"));
+                println!(
+                    "Update checking is not yet implemented. Visit https://github.com/danielsimonjr/ironclaw/releases for the latest release."
+                );
+            } else {
+                println!(
+                    "Self-update is not yet implemented. Visit https://github.com/danielsimonjr/ironclaw/releases to download the latest version."
+                );
+            }
+            return Ok(());
+        }
         None | Some(Command::Run) => {
             // Continue to run agent
         }

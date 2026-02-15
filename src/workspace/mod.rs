@@ -40,6 +40,7 @@
 //! 3. **Self-documenting**: Use README.md files to describe directory structure
 //! 4. **Hybrid search**: Vector similarity + BM25 full-text via RRF
 
+pub mod batch_embeddings;
 mod chunker;
 mod document;
 mod embeddings;
