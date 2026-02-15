@@ -14,15 +14,19 @@
 //!         ◄── GET  / ───────────────── Static HTML/CSS/JS
 //! ```
 
+pub mod agent_management;
 pub mod auth;
 pub mod canvas;
 pub mod config_editor;
 pub mod log_layer;
+pub mod mdns;
+pub mod network_mode;
 pub mod openai_compat;
 pub mod pid_lock;
 pub mod presence;
 pub mod server;
 pub mod sse;
+pub mod tailscale;
 pub mod types;
 pub mod ws;
 

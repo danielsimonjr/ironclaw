@@ -44,6 +44,8 @@ pub mod batch_embeddings;
 mod chunker;
 mod document;
 mod embeddings;
+pub mod gemini_embeddings;
+pub mod local_embeddings;
 #[cfg(feature = "postgres")]
 mod repository;
 mod search;
@@ -54,6 +56,8 @@ pub use document::{
     ProfileType, UserProfile, WorkspaceEntry, paths,
 };
 pub use embeddings::{EmbeddingProvider, MockEmbeddings, NearAiEmbeddings, OpenAiEmbeddings};
+pub use gemini_embeddings::GeminiEmbeddings;
+pub use local_embeddings::LocalEmbeddings;
 #[cfg(feature = "postgres")]
 pub use repository::Repository;
 pub use search::{RankedResult, SearchConfig, SearchResult, reciprocal_rank_fusion};

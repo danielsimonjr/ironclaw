@@ -7,11 +7,13 @@
 //! - Enforcing safety policies
 //! - Detecting secret leakage in outputs
 
+pub mod allowlist;
 pub mod bins_allowlist;
 pub mod elevated;
 pub mod group_policies;
 mod leak_detector;
 pub mod log_redaction;
+pub mod oauth;
 mod policy;
 mod sanitizer;
 mod validator;

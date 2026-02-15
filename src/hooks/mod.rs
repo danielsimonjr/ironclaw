@@ -12,6 +12,7 @@
 
 pub mod bundled;
 mod engine;
+pub mod gmail_pubsub;
 pub mod transcribe;
 mod types;
 pub mod webhooks;
