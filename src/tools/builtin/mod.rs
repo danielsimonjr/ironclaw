@@ -1,5 +1,6 @@
 //! Built-in tools that come with the agent.
 
+mod browser;
 mod echo;
 mod ecommerce;
 pub mod extension_tools;
@@ -16,6 +17,7 @@ pub(crate) mod shell;
 mod taskrabbit;
 mod time;
 
+pub use browser::{BrowserAction, BrowserManager, BrowserSession, BrowserTool};
 pub use echo::EchoTool;
 pub use ecommerce::EcommerceTool;
 pub use extension_tools::{

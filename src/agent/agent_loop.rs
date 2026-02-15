@@ -16,12 +16,13 @@ use crate::agent::session_manager::SessionManager;
 use crate::agent::submission::{Submission, SubmissionParser, SubmissionResult};
 use crate::agent::{HeartbeatConfig as AgentHeartbeatConfig, MessageIntent, Router, Scheduler};
 use crate::channels::{ChannelManager, IncomingMessage, OutgoingResponse, StatusUpdate};
-use crate::config::{AgentConfig, HeartbeatConfig, RoutineConfig};
+use crate::config::{AgentConfig, Config, HeartbeatConfig, RoutineConfig};
 use crate::context::ContextManager;
 use crate::context::JobContext;
 use crate::db::Database;
 use crate::error::Error;
 use crate::extensions::ExtensionManager;
+use crate::hot_reload::{ConfigWatcher, HotReloadConfig};
 use crate::llm::{ChatMessage, LlmProvider, Reasoning, ReasoningContext, RespondResult};
 use crate::safety::SafetyLayer;
 use crate::tools::ToolRegistry;
@@ -85,6 +86,12 @@ pub struct Agent {
     context_monitor: ContextMonitor,
     heartbeat_config: Option<HeartbeatConfig>,
     routine_config: Option<RoutineConfig>,
+    /// Hot-reloadable configuration container, updated by the config reload task.
+    #[allow(dead_code)] // Will be read by components once hot-reload consumers are wired in
+    hot_config: Option<HotReloadConfig<Config>>,
+    /// Configuration file watcher, kept alive to maintain filesystem watches.
+    #[allow(dead_code)] // Held to keep the file watcher alive
+    config_watcher: Option<Arc<ConfigWatcher>>,
 }
 
 impl Agent {
@@ -126,6 +133,8 @@ impl Agent {
             context_monitor: ContextMonitor::new(),
             heartbeat_config,
             routine_config,
+            hot_config: None,
+            config_watcher: None,
         }
     }
 

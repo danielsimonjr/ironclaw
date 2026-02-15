@@ -15,11 +15,13 @@
 
 pub mod discovery;
 pub mod manager;
+pub mod plugin_manager;
 pub mod plugins;
 pub mod registry;
 
 pub use discovery::OnlineDiscovery;
 pub use manager::ExtensionManager;
+pub use plugin_manager::{PluginError, PluginManager, PluginSnapshot, PluginSummary};
 pub use registry::ExtensionRegistry;
 
 use serde::{Deserialize, Serialize};

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+use super::transcribe::TranscriptionHookResult;
 use super::types::{
     Hook, HookContext, HookError, HookEvent, HookOutcome, HookType, InboundHookResult,
     OutboundHookResult, ToolCallHookResult, TransformResponseResult,
@@ -362,6 +363,19 @@ impl HookEngine {
         Ok(TransformResponseResult {
             content: current_content,
         })
+    }
+
+    /// Execute the transcribeAudio hook.
+    ///
+    /// Delegates to the transcribe module to download and prepare audio
+    /// for transcription by an external provider.
+    pub async fn run_transcribe_audio(
+        &self,
+        audio_url: &str,
+        mime_type: &str,
+        ctx: &HookContext,
+    ) -> Result<TranscriptionHookResult, HookError> {
+        super::transcribe::run_transcribe_audio(audio_url, mime_type, ctx).await
     }
 
     /// Execute a single hook and return its outcome.

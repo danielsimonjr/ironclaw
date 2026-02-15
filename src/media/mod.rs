@@ -13,6 +13,7 @@
 
 mod cache;
 mod detection;
+mod edge_tts;
 mod image;
 mod pdf;
 mod sticker;
@@ -23,6 +24,7 @@ mod vision;
 
 pub use cache::MediaCache;
 pub use detection::{MediaInfo, MediaType, detect_mime_type, validate_media_url};
+pub use edge_tts::{EdgeTtsProvider, EdgeVoice};
 pub use image::{ImageFormat, ImageProcessor, ProcessedImage};
 pub use pdf::{PdfExtractor, PdfPage};
 pub use sticker::{ConvertedSticker, StickerConverter, StickerFormat};

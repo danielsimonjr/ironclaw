@@ -120,6 +120,11 @@ impl SseManager {
                     SseEvent::JobStatus { .. } => "job_status",
                     SseEvent::JobResult { .. } => "job_result",
                     SseEvent::Heartbeat => "heartbeat",
+                    SseEvent::ChannelStatus { .. } => "channel_status",
+                    SseEvent::ConfigChanged { .. } => "config_changed",
+                    SseEvent::CanvasCreated { .. } => "canvas_created",
+                    SseEvent::CanvasUpdated { .. } => "canvas_updated",
+                    SseEvent::CanvasDeleted { .. } => "canvas_deleted",
                 };
                 Ok(Event::default().event(event_type).data(data))
             });

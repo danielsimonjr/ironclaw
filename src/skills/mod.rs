@@ -8,5 +8,7 @@
 //! - Sharing reusable capability sets
 
 mod registry;
+pub mod vulnerability_scanner;
 
 pub use registry::{Skill, SkillConfig, SkillRegistry, SkillStatus, SkillTool};
+pub use vulnerability_scanner::{Finding, ScanResult, ScanRule, Severity, VulnerabilityScanner};
