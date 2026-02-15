@@ -28,8 +28,8 @@ use crate::history::{
     SandboxJobSummary, SettingRow,
 };
 use crate::workspace::{
-    MemoryChunk, MemoryDocument, RankedResult, SearchConfig, SearchResult, WorkspaceEntry,
-    reciprocal_rank_fusion,
+    ConnectionType, MemoryChunk, MemoryConnection, MemoryDocument, MemorySpace, ProfileType,
+    RankedResult, SearchConfig, SearchResult, UserProfile, WorkspaceEntry, reciprocal_rank_fusion,
 };
 
 use crate::db::libsql_migrations;
@@ -2526,6 +2526,458 @@ impl Database for LibSqlBackend {
 
         Ok(reciprocal_rank_fusion(fts_results, vector_results, config))
     }
+
+    // ==================== Workspace: Connections ====================
+
+    async fn create_connection(&self, connection: &MemoryConnection) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            r#"
+            INSERT INTO memory_connections (id, source_id, target_id, connection_type, strength, metadata, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT (source_id, target_id, connection_type) DO UPDATE
+            SET strength = excluded.strength, metadata = excluded.metadata
+            "#,
+            params![
+                connection.id.to_string(),
+                connection.source_id.to_string(),
+                connection.target_id.to_string(),
+                connection.connection_type.to_string(),
+                connection.strength as f64,
+                serde_json::to_string(&connection.metadata).unwrap_or_default(),
+                connection.created_at.to_rfc3339()
+            ],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Insert connection failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    async fn get_connections(
+        &self,
+        document_id: Uuid,
+    ) -> Result<Vec<MemoryConnection>, WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let mut rows = conn
+            .query(
+                r#"
+                SELECT id, source_id, target_id, connection_type, strength, metadata, created_at
+                FROM memory_connections
+                WHERE source_id = ?1 OR target_id = ?1
+                ORDER BY created_at DESC
+                "#,
+                params![document_id.to_string()],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Query connections failed: {}", e),
+            })?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?
+        {
+            let ct_str = get_text(&row, 3);
+            results.push(MemoryConnection {
+                id: get_text(&row, 0).parse().unwrap_or_default(),
+                source_id: get_text(&row, 1).parse().unwrap_or_default(),
+                target_id: get_text(&row, 2).parse().unwrap_or_default(),
+                connection_type: ConnectionType::from_str_loose(&ct_str)
+                    .unwrap_or(ConnectionType::Extends),
+                strength: row.get::<f64>(4).unwrap_or(1.0) as f32,
+                metadata: get_json(&row, 5),
+                created_at: get_ts(&row, 6),
+            });
+        }
+        Ok(results)
+    }
+
+    async fn delete_connection(&self, id: Uuid) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            "DELETE FROM memory_connections WHERE id = ?1",
+            params![id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Delete connection failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    // ==================== Workspace: Spaces ====================
+
+    async fn create_space(&self, space: &MemorySpace) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            r#"
+            INSERT INTO memory_spaces (id, user_id, name, description, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT (user_id, name) DO UPDATE SET description = excluded.description
+            "#,
+            params![
+                space.id.to_string(),
+                space.user_id.as_str(),
+                space.name.as_str(),
+                space.description.as_str(),
+                space.created_at.to_rfc3339(),
+                space.updated_at.to_rfc3339()
+            ],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Insert space failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    async fn list_spaces(&self, user_id: &str) -> Result<Vec<MemorySpace>, WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let mut rows = conn
+            .query(
+                "SELECT id, user_id, name, description, created_at, updated_at FROM memory_spaces WHERE user_id = ?1 ORDER BY name",
+                params![user_id],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Query spaces failed: {}", e),
+            })?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?
+        {
+            results.push(MemorySpace {
+                id: get_text(&row, 0).parse().unwrap_or_default(),
+                user_id: get_text(&row, 1),
+                name: get_text(&row, 2),
+                description: get_text(&row, 3),
+                created_at: get_ts(&row, 4),
+                updated_at: get_ts(&row, 5),
+            });
+        }
+        Ok(results)
+    }
+
+    async fn get_space_by_name(
+        &self,
+        user_id: &str,
+        name: &str,
+    ) -> Result<Option<MemorySpace>, WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let mut rows = conn
+            .query(
+                "SELECT id, user_id, name, description, created_at, updated_at FROM memory_spaces WHERE user_id = ?1 AND name = ?2",
+                params![user_id, name],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Query space failed: {}", e),
+            })?;
+
+        match rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })? {
+            Some(row) => Ok(Some(MemorySpace {
+                id: get_text(&row, 0).parse().unwrap_or_default(),
+                user_id: get_text(&row, 1),
+                name: get_text(&row, 2),
+                description: get_text(&row, 3),
+                created_at: get_ts(&row, 4),
+                updated_at: get_ts(&row, 5),
+            })),
+            None => Ok(None),
+        }
+    }
+
+    async fn add_to_space(&self, space_id: Uuid, document_id: Uuid) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            "INSERT INTO memory_space_members (space_id, document_id) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+            params![space_id.to_string(), document_id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Add to space failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    async fn remove_from_space(
+        &self,
+        space_id: Uuid,
+        document_id: Uuid,
+    ) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            "DELETE FROM memory_space_members WHERE space_id = ?1 AND document_id = ?2",
+            params![space_id.to_string(), document_id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Remove from space failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    async fn list_space_documents(
+        &self,
+        space_id: Uuid,
+    ) -> Result<Vec<MemoryDocument>, WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let mut rows = conn
+            .query(
+                r#"
+                SELECT d.id, d.user_id, d.agent_id, d.path, d.content,
+                       d.created_at, d.updated_at, d.metadata
+                FROM memory_documents d
+                JOIN memory_space_members m ON m.document_id = d.id
+                WHERE m.space_id = ?1
+                ORDER BY d.updated_at DESC
+                "#,
+                params![space_id.to_string()],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("List space docs failed: {}", e),
+            })?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?
+        {
+            results.push(row_to_memory_document(&row));
+        }
+        Ok(results)
+    }
+
+    async fn delete_space(&self, id: Uuid) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            "DELETE FROM memory_spaces WHERE id = ?1",
+            params![id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Delete space failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    // ==================== Workspace: User Profiles ====================
+
+    async fn upsert_profile(&self, profile: &UserProfile) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            r#"
+            INSERT INTO memory_profiles (id, user_id, profile_type, key, value, confidence, source, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            ON CONFLICT (user_id, key) DO UPDATE
+            SET value = excluded.value, confidence = excluded.confidence,
+                source = excluded.source, profile_type = excluded.profile_type
+            "#,
+            params![
+                profile.id.to_string(),
+                profile.user_id.as_str(),
+                profile.profile_type.to_string(),
+                profile.key.as_str(),
+                profile.value.as_str(),
+                profile.confidence as f64,
+                profile.source.as_str(),
+                profile.created_at.to_rfc3339(),
+                profile.updated_at.to_rfc3339()
+            ],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Upsert profile failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    async fn get_profile(&self, user_id: &str) -> Result<Vec<UserProfile>, WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let mut rows = conn
+            .query(
+                "SELECT id, user_id, profile_type, key, value, confidence, source, created_at, updated_at FROM memory_profiles WHERE user_id = ?1 ORDER BY profile_type, key",
+                params![user_id],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Query profile failed: {}", e),
+            })?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?
+        {
+            results.push(row_to_profile_libsql(&row));
+        }
+        Ok(results)
+    }
+
+    async fn get_profile_by_type(
+        &self,
+        user_id: &str,
+        profile_type: ProfileType,
+    ) -> Result<Vec<UserProfile>, WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let mut rows = conn
+            .query(
+                "SELECT id, user_id, profile_type, key, value, confidence, source, created_at, updated_at FROM memory_profiles WHERE user_id = ?1 AND profile_type = ?2 ORDER BY key",
+                params![user_id, profile_type.to_string()],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Query profile by type failed: {}", e),
+            })?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?
+        {
+            results.push(row_to_profile_libsql(&row));
+        }
+        Ok(results)
+    }
+
+    async fn delete_profile_entry(&self, user_id: &str, key: &str) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            "DELETE FROM memory_profiles WHERE user_id = ?1 AND key = ?2",
+            params![user_id, key],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Delete profile entry failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    // ==================== Workspace: Document Metadata ====================
+
+    async fn record_document_access(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        conn.execute(
+            "UPDATE memory_documents SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?1",
+            params![document_id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Record access failed: {}", e),
+        })?;
+        Ok(())
+    }
+
+    async fn update_document_metadata(
+        &self,
+        document_id: Uuid,
+        metadata: &serde_json::Value,
+    ) -> Result<(), WorkspaceError> {
+        let conn = self.connect().map_err(|e| WorkspaceError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        // Read current metadata
+        let mut rows = conn
+            .query(
+                "SELECT metadata FROM memory_documents WHERE id = ?1",
+                params![document_id.to_string()],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Read metadata failed: {}", e),
+            })?;
+
+        let current: serde_json::Value = if let Some(row) =
+            rows.next()
+                .await
+                .map_err(|e| WorkspaceError::SearchFailed {
+                    reason: e.to_string(),
+                })? {
+            get_json(&row, 0)
+        } else {
+            serde_json::json!({})
+        };
+
+        // Merge metadata fields
+        let mut merged = current;
+        if let (serde_json::Value::Object(base), serde_json::Value::Object(updates)) =
+            (&mut merged, metadata.clone())
+        {
+            for (k, v) in updates {
+                base.insert(k, v);
+            }
+        }
+
+        conn.execute(
+            "UPDATE memory_documents SET metadata = ?2 WHERE id = ?1",
+            params![
+                document_id.to_string(),
+                serde_json::to_string(&merged).unwrap_or_default()
+            ],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Update metadata failed: {}", e),
+        })?;
+
+        Ok(())
+    }
 }
 
 // ==================== Row conversion helpers ====================
@@ -2585,6 +3037,25 @@ fn row_to_routine_libsql(row: &libsql::Row) -> Result<Routine, DatabaseError> {
         created_at: get_ts(row, 22),
         updated_at: get_ts(row, 23),
     })
+}
+
+fn row_to_profile_libsql(row: &libsql::Row) -> UserProfile {
+    let pt_str = get_text(row, 2);
+    UserProfile {
+        id: get_text(row, 0).parse().unwrap_or_default(),
+        user_id: get_text(row, 1),
+        profile_type: if pt_str == "static" {
+            ProfileType::Static
+        } else {
+            ProfileType::Dynamic
+        },
+        key: get_text(row, 3),
+        value: get_text(row, 4),
+        confidence: row.get::<f64>(5).unwrap_or(0.0) as f32,
+        source: get_text(row, 6),
+        created_at: get_ts(row, 7),
+        updated_at: get_ts(row, 8),
+    }
 }
 
 fn row_to_routine_run_libsql(row: &libsql::Row) -> Result<RoutineRun, DatabaseError> {

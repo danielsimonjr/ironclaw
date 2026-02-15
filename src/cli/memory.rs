@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use clap::Subcommand;
 
-use crate::workspace::{EmbeddingProvider, SearchConfig, Workspace};
+use crate::workspace::{ConnectionType, EmbeddingProvider, ProfileType, SearchConfig, Workspace};
 
 /// Run a memory command using the Database trait (works with any backend).
 pub async fn run_memory_command_with_db(
@@ -30,6 +30,9 @@ pub async fn run_memory_command_with_db(
         } => write(&workspace, &path, content, append).await,
         MemoryCommand::Tree { path, depth } => tree(&workspace, &path, depth).await,
         MemoryCommand::Status => status(&workspace).await,
+        MemoryCommand::Spaces { action } => spaces(&workspace, action).await,
+        MemoryCommand::Profile { action } => profile(&workspace, action).await,
+        MemoryCommand::Connect { action } => connect(&workspace, action).await,
     }
 }
 
@@ -77,6 +80,102 @@ pub enum MemoryCommand {
 
     /// Show workspace status (document count, index health)
     Status,
+
+    /// Manage memory spaces (named collections)
+    Spaces {
+        #[command(subcommand)]
+        action: SpaceAction,
+    },
+
+    /// Manage user profile facts
+    Profile {
+        #[command(subcommand)]
+        action: ProfileAction,
+    },
+
+    /// Manage memory connections (knowledge graph)
+    Connect {
+        #[command(subcommand)]
+        action: ConnectAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum SpaceAction {
+    /// Create a new space
+    Create {
+        /// Space name
+        name: String,
+        /// Space description
+        #[arg(short, long, default_value = "")]
+        description: String,
+    },
+    /// List all spaces
+    List,
+    /// Add a document to a space
+    Add {
+        /// Space name
+        name: String,
+        /// Document path
+        path: String,
+    },
+    /// Remove a document from a space
+    Remove {
+        /// Space name
+        name: String,
+        /// Document path
+        path: String,
+    },
+    /// List documents in a space
+    Contents {
+        /// Space name
+        name: String,
+    },
+    /// Delete a space
+    Delete {
+        /// Space name
+        name: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ProfileAction {
+    /// Set a profile fact
+    Set {
+        /// Fact key (e.g., "name", "location")
+        key: String,
+        /// Fact value
+        value: String,
+        /// Profile type: static or dynamic
+        #[arg(short = 't', long, default_value = "static")]
+        profile_type: String,
+    },
+    /// Show all profile facts
+    Get,
+    /// Delete a profile fact
+    Delete {
+        /// Fact key to delete
+        key: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ConnectAction {
+    /// Create a connection between documents
+    Create {
+        /// Source document path
+        source: String,
+        /// Target document path
+        target: String,
+        /// Connection type: updates, extends, derives
+        #[arg(short = 't', long, default_value = "extends")]
+        connection_type: String,
+    },
+    /// List connections for a document
+    List {
+        /// Document path
+        path: String,
+    },
 }
 
 /// Run a memory command (PostgreSQL backend).
@@ -101,6 +200,9 @@ pub async fn run_memory_command(
         } => write(&workspace, &path, content, append).await,
         MemoryCommand::Tree { path, depth } => tree(&workspace, &path, depth).await,
         MemoryCommand::Status => status(&workspace).await,
+        MemoryCommand::Spaces { action } => spaces(&workspace, action).await,
+        MemoryCommand::Profile { action } => profile(&workspace, action).await,
+        MemoryCommand::Connect { action } => connect(&workspace, action).await,
     }
 }
 
@@ -247,6 +349,135 @@ async fn status(workspace: &Workspace) -> anyhow::Result<()> {
         println!("    [{}] {}", marker, path);
     }
 
+    Ok(())
+}
+
+async fn spaces(workspace: &Workspace, action: SpaceAction) -> anyhow::Result<()> {
+    match action {
+        SpaceAction::Create { name, description } => {
+            workspace.create_space(&name, &description).await?;
+            println!("Created space: {}", name);
+        }
+        SpaceAction::List => {
+            let spaces = workspace.list_spaces().await?;
+            if spaces.is_empty() {
+                println!("No spaces found.");
+            } else {
+                println!("{} space(s):\n", spaces.len());
+                for s in &spaces {
+                    let desc = if s.description.is_empty() {
+                        "(no description)".to_string()
+                    } else {
+                        s.description.clone()
+                    };
+                    println!("  {} - {}", s.name, desc);
+                }
+            }
+        }
+        SpaceAction::Add { name, path } => {
+            workspace.add_to_space(&name, &path).await?;
+            println!("Added {} to space {}", path, name);
+        }
+        SpaceAction::Remove { name, path } => {
+            workspace.remove_from_space(&name, &path).await?;
+            println!("Removed {} from space {}", path, name);
+        }
+        SpaceAction::Contents { name } => {
+            let docs = workspace.list_space_documents(&name).await?;
+            if docs.is_empty() {
+                println!("Space '{}' is empty.", name);
+            } else {
+                println!("Space '{}' ({} documents):\n", name, docs.len());
+                for d in &docs {
+                    println!("  {} ({} words)", d.path, d.word_count());
+                }
+            }
+        }
+        SpaceAction::Delete { name } => {
+            workspace.delete_space(&name).await?;
+            println!("Deleted space: {}", name);
+        }
+    }
+    Ok(())
+}
+
+async fn profile(workspace: &Workspace, action: ProfileAction) -> anyhow::Result<()> {
+    match action {
+        ProfileAction::Set {
+            key,
+            value,
+            profile_type,
+        } => {
+            let pt = if profile_type == "dynamic" {
+                ProfileType::Dynamic
+            } else {
+                ProfileType::Static
+            };
+            workspace.set_profile_fact(pt, &key, &value, "cli").await?;
+            println!("Set profile fact: {} = {}", key, value);
+        }
+        ProfileAction::Get => {
+            let facts = workspace.get_profile().await?;
+            if facts.is_empty() {
+                println!("No profile facts found.");
+            } else {
+                println!("{} profile fact(s):\n", facts.len());
+                for f in &facts {
+                    println!(
+                        "  [{}] {} = {} (confidence: {:.0}%, source: {})",
+                        f.profile_type,
+                        f.key,
+                        f.value,
+                        f.confidence * 100.0,
+                        f.source
+                    );
+                }
+            }
+        }
+        ProfileAction::Delete { key } => {
+            workspace.delete_profile_fact(&key).await?;
+            println!("Deleted profile fact: {}", key);
+        }
+    }
+    Ok(())
+}
+
+async fn connect(workspace: &Workspace, action: ConnectAction) -> anyhow::Result<()> {
+    match action {
+        ConnectAction::Create {
+            source,
+            target,
+            connection_type,
+        } => {
+            let ct = ConnectionType::from_str_loose(&connection_type)
+                .ok_or_else(|| anyhow::anyhow!("Invalid connection type: {}", connection_type))?;
+            let conn = workspace.connect(&source, &target, ct).await?;
+            println!(
+                "Created connection: {} --[{}]--> {} (id: {})",
+                source, connection_type, target, conn.id
+            );
+        }
+        ConnectAction::List { path } => {
+            let doc = workspace.read(&path).await?;
+            let connections = workspace.get_connections(doc.id).await?;
+            if connections.is_empty() {
+                println!("No connections for: {}", path);
+            } else {
+                println!("{} connection(s) for '{}':\n", connections.len(), path);
+                for c in &connections {
+                    let direction = if c.source_id == doc.id {
+                        format!("--> {}", c.target_id)
+                    } else {
+                        format!("<-- {}", c.source_id)
+                    };
+                    println!(
+                        "  [{}] {} (strength: {:.2})",
+                        c.connection_type, direction, c.strength
+                    );
+                }
+            }
+        }
+    }
     Ok(())
 }
 

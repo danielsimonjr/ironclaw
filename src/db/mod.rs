@@ -35,7 +35,10 @@ use crate::history::{
     ConversationMessage, ConversationSummary, JobEventRecord, LlmCallRecord, SandboxJobRecord,
     SandboxJobSummary, SettingRow,
 };
-use crate::workspace::{MemoryChunk, MemoryDocument, WorkspaceEntry};
+use crate::workspace::{
+    MemoryChunk, MemoryConnection, MemoryDocument, MemorySpace, ProfileType, UserProfile,
+    WorkspaceEntry,
+};
 use crate::workspace::{SearchConfig, SearchResult};
 
 /// Create a database backend from configuration, run migrations, and return it.
@@ -535,4 +538,82 @@ pub trait Database: Send + Sync {
         embedding: Option<&[f32]>,
         config: &SearchConfig,
     ) -> Result<Vec<SearchResult>, WorkspaceError>;
+
+    // ==================== Workspace: Connections ====================
+
+    /// Create a connection between two memory documents.
+    async fn create_connection(&self, connection: &MemoryConnection) -> Result<(), WorkspaceError>;
+
+    /// Get all connections for a document (both as source and target).
+    async fn get_connections(
+        &self,
+        document_id: Uuid,
+    ) -> Result<Vec<MemoryConnection>, WorkspaceError>;
+
+    /// Delete a connection by ID.
+    async fn delete_connection(&self, id: Uuid) -> Result<(), WorkspaceError>;
+
+    // ==================== Workspace: Spaces ====================
+
+    /// Create a new memory space.
+    async fn create_space(&self, space: &MemorySpace) -> Result<(), WorkspaceError>;
+
+    /// List spaces for a user.
+    async fn list_spaces(&self, user_id: &str) -> Result<Vec<MemorySpace>, WorkspaceError>;
+
+    /// Get a space by name.
+    async fn get_space_by_name(
+        &self,
+        user_id: &str,
+        name: &str,
+    ) -> Result<Option<MemorySpace>, WorkspaceError>;
+
+    /// Add a document to a space.
+    async fn add_to_space(&self, space_id: Uuid, document_id: Uuid) -> Result<(), WorkspaceError>;
+
+    /// Remove a document from a space.
+    async fn remove_from_space(
+        &self,
+        space_id: Uuid,
+        document_id: Uuid,
+    ) -> Result<(), WorkspaceError>;
+
+    /// List documents in a space.
+    async fn list_space_documents(
+        &self,
+        space_id: Uuid,
+    ) -> Result<Vec<MemoryDocument>, WorkspaceError>;
+
+    /// Delete a space and its memberships.
+    async fn delete_space(&self, id: Uuid) -> Result<(), WorkspaceError>;
+
+    // ==================== Workspace: User Profiles ====================
+
+    /// Upsert a user profile entry.
+    async fn upsert_profile(&self, profile: &UserProfile) -> Result<(), WorkspaceError>;
+
+    /// Get all profile entries for a user.
+    async fn get_profile(&self, user_id: &str) -> Result<Vec<UserProfile>, WorkspaceError>;
+
+    /// Get profile entries of a specific type.
+    async fn get_profile_by_type(
+        &self,
+        user_id: &str,
+        profile_type: ProfileType,
+    ) -> Result<Vec<UserProfile>, WorkspaceError>;
+
+    /// Delete a profile entry by key.
+    async fn delete_profile_entry(&self, user_id: &str, key: &str) -> Result<(), WorkspaceError>;
+
+    // ==================== Workspace: Document Metadata ====================
+
+    /// Record an access to a document (increments access_count, updates last_accessed_at).
+    async fn record_document_access(&self, document_id: Uuid) -> Result<(), WorkspaceError>;
+
+    /// Update document metadata fields (importance, tags, source_url, event_date).
+    async fn update_document_metadata(
+        &self,
+        document_id: Uuid,
+        metadata: &serde_json::Value,
+    ) -> Result<(), WorkspaceError>;
 }

@@ -22,7 +22,8 @@ use crate::history::{
     SandboxJobSummary, SettingRow, Store,
 };
 use crate::workspace::{
-    MemoryChunk, MemoryDocument, Repository, SearchConfig, SearchResult, WorkspaceEntry,
+    MemoryChunk, MemoryConnection, MemoryDocument, MemorySpace, ProfileType, Repository,
+    SearchConfig, SearchResult, UserProfile, WorkspaceEntry,
 };
 
 /// PostgreSQL database backend.
@@ -622,6 +623,102 @@ impl Database for PgBackend {
     ) -> Result<Vec<SearchResult>, WorkspaceError> {
         self.repo
             .hybrid_search(user_id, agent_id, query, embedding, config)
+            .await
+    }
+
+    // ==================== Workspace: Connections ====================
+
+    async fn create_connection(&self, connection: &MemoryConnection) -> Result<(), WorkspaceError> {
+        self.repo.create_connection(connection).await
+    }
+
+    async fn get_connections(
+        &self,
+        document_id: Uuid,
+    ) -> Result<Vec<MemoryConnection>, WorkspaceError> {
+        self.repo.get_connections(document_id).await
+    }
+
+    async fn delete_connection(&self, id: Uuid) -> Result<(), WorkspaceError> {
+        self.repo.delete_connection(id).await
+    }
+
+    // ==================== Workspace: Spaces ====================
+
+    async fn create_space(&self, space: &MemorySpace) -> Result<(), WorkspaceError> {
+        self.repo.create_space(space).await
+    }
+
+    async fn list_spaces(&self, user_id: &str) -> Result<Vec<MemorySpace>, WorkspaceError> {
+        self.repo.list_spaces(user_id).await
+    }
+
+    async fn get_space_by_name(
+        &self,
+        user_id: &str,
+        name: &str,
+    ) -> Result<Option<MemorySpace>, WorkspaceError> {
+        self.repo.get_space_by_name(user_id, name).await
+    }
+
+    async fn add_to_space(&self, space_id: Uuid, document_id: Uuid) -> Result<(), WorkspaceError> {
+        self.repo.add_to_space(space_id, document_id).await
+    }
+
+    async fn remove_from_space(
+        &self,
+        space_id: Uuid,
+        document_id: Uuid,
+    ) -> Result<(), WorkspaceError> {
+        self.repo.remove_from_space(space_id, document_id).await
+    }
+
+    async fn list_space_documents(
+        &self,
+        space_id: Uuid,
+    ) -> Result<Vec<MemoryDocument>, WorkspaceError> {
+        self.repo.list_space_documents(space_id).await
+    }
+
+    async fn delete_space(&self, id: Uuid) -> Result<(), WorkspaceError> {
+        self.repo.delete_space(id).await
+    }
+
+    // ==================== Workspace: User Profiles ====================
+
+    async fn upsert_profile(&self, profile: &UserProfile) -> Result<(), WorkspaceError> {
+        self.repo.upsert_profile(profile).await
+    }
+
+    async fn get_profile(&self, user_id: &str) -> Result<Vec<UserProfile>, WorkspaceError> {
+        self.repo.get_profile(user_id).await
+    }
+
+    async fn get_profile_by_type(
+        &self,
+        user_id: &str,
+        profile_type: ProfileType,
+    ) -> Result<Vec<UserProfile>, WorkspaceError> {
+        self.repo.get_profile_by_type(user_id, profile_type).await
+    }
+
+    async fn delete_profile_entry(&self, user_id: &str, key: &str) -> Result<(), WorkspaceError> {
+        self.repo.delete_profile_entry(user_id, key).await
+    }
+
+    // ==================== Workspace: Document Metadata ====================
+
+    async fn record_document_access(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
+        self.repo.record_document_access(document_id).await
+    }
+
+    async fn update_document_metadata(
+        &self,
+        document_id: Uuid,
+        metadata: &serde_json::Value,
+    ) -> Result<(), WorkspaceError> {
+        self.repo
+            .update_document_metadata(document_id, metadata)
             .await
     }
 }
