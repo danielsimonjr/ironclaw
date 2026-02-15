@@ -7,6 +7,8 @@
 //! - Enforcing safety policies
 //! - Detecting secret leakage in outputs
 
+pub mod bins_allowlist;
+pub mod elevated;
 mod leak_detector;
 mod policy;
 mod sanitizer;

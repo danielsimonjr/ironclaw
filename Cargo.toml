@@ -22,7 +22,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
 
 # HTTP client
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "multipart"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -59,6 +59,17 @@ async-trait = "0.1"
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+
+# URL parsing
+url = "2"
+
+# YAML/JSON5 config support
+serde_yaml = "0.9"
+json5 = "0.4"
+
+# File watching for hot-reload
+notify = "7"
 
 # Terminal
 crossterm = "0.28"
@@ -101,6 +112,8 @@ wasmparser = "0.220"  # WASM binary parsing for validation
 
 # Cryptography for secrets management
 aes-gcm = "0.10"
+hmac = "0.12"
+hex = "0.4"
 hkdf = "0.12"
 sha2 = "0.10"
 blake3 = "1"

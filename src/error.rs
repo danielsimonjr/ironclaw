@@ -45,6 +45,15 @@ pub enum Error {
 
     #[error("Worker error: {0}")]
     Worker(#[from] WorkerError),
+
+    #[error("Hook error: {0}")]
+    Hook(#[from] HookError),
+
+    #[error("Media error: {0}")]
+    Media(#[from] MediaError),
+
+    #[error("Skills error: {0}")]
+    Skills(#[from] SkillsError),
 }
 
 /// Configuration-related errors.
@@ -366,6 +375,54 @@ pub enum WorkerError {
 
     #[error("Missing worker token (IRONCLAW_WORKER_TOKEN not set)")]
     MissingToken,
+}
+
+/// Hook-related errors.
+#[derive(Debug, thiserror::Error)]
+pub enum HookError {
+    #[error("Hook {name} failed: {reason}")]
+    ExecutionFailed { name: String, reason: String },
+
+    #[error("Hook {name} timed out after {timeout_ms}ms")]
+    Timeout { name: String, timeout_ms: u64 },
+
+    #[error("Hook registration failed: {reason}")]
+    RegistrationFailed { reason: String },
+}
+
+/// Media processing errors.
+#[derive(Debug, thiserror::Error)]
+pub enum MediaError {
+    #[error("Unsupported media type: {mime_type}")]
+    UnsupportedType { mime_type: String },
+
+    #[error("Media processing failed: {reason}")]
+    ProcessingFailed { reason: String },
+
+    #[error("Media file too large: {size} bytes exceeds {max} byte limit")]
+    TooLarge { size: usize, max: usize },
+
+    #[error("Media download failed: {reason}")]
+    DownloadFailed { reason: String },
+
+    #[error("Transcription failed: {reason}")]
+    TranscriptionFailed { reason: String },
+
+    #[error("Vision processing failed: {reason}")]
+    VisionFailed { reason: String },
+}
+
+/// Skills system errors.
+#[derive(Debug, thiserror::Error)]
+pub enum SkillsError {
+    #[error("Skill {name} not found")]
+    NotFound { name: String },
+
+    #[error("Skill {name} failed: {reason}")]
+    ExecutionFailed { name: String, reason: String },
+
+    #[error("Invalid skill definition: {reason}")]
+    InvalidDefinition { reason: String },
 }
 
 /// Result type alias for the agent.
