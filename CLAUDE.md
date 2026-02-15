@@ -295,7 +295,12 @@ Config loads with priority: environment variables > database settings > defaults
 
 - `DATABASE_URL` / `DATABASE_BACKEND` — Connection string and backend (`postgres` default, or `libsql`)
 - `DATABASE_POOL_SIZE` — Connection pool size (default 10)
-- `NEARAI_SESSION_TOKEN` / `NEARAI_MODEL` / `NEARAI_BASE_URL` / `NEARAI_AUTH_URL` — LLM provider (required)
+- `LLM_BACKEND` — LLM provider: `nearai` (default), `openai`, `anthropic`, `ollama`, `openai_compatible`
+- `NEARAI_SESSION_TOKEN` / `NEARAI_MODEL` / `NEARAI_BASE_URL` / `NEARAI_AUTH_URL` — NEAR AI provider (when `LLM_BACKEND=nearai`)
+- `OPENAI_API_KEY` / `OPENAI_MODEL` — OpenAI provider (when `LLM_BACKEND=openai`)
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — Anthropic provider (when `LLM_BACKEND=anthropic`)
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL` — Ollama provider (when `LLM_BACKEND=ollama`)
+- `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` — OpenAI-compatible provider (when `LLM_BACKEND=openai_compatible`)
 - `GATEWAY_ENABLED` / `GATEWAY_PORT` / `GATEWAY_AUTH_TOKEN` — Web UI gateway
 - `SANDBOX_ENABLED` — Docker container isolation
 - `CLAUDE_CODE_ENABLED` — Claude CLI delegation mode

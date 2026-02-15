@@ -401,12 +401,14 @@ pub struct NearAiConfig {
 
 impl LlmConfig {
     fn resolve(settings: &Settings) -> Result<Self, ConfigError> {
-        // Determine backend (default: NearAi)
+        // Determine backend: env var > settings > default (NearAi)
         let backend: LlmBackend = if let Some(b) = optional_env("LLM_BACKEND")? {
             b.parse().map_err(|e| ConfigError::InvalidValue {
                 key: "LLM_BACKEND".to_string(),
                 message: e,
             })?
+        } else if let Some(ref b) = settings.llm_backend {
+            b.parse().unwrap_or(LlmBackend::NearAi)
         } else {
             LlmBackend::NearAi
         };
@@ -481,8 +483,9 @@ impl LlmConfig {
         };
 
         let openai_compatible = if backend == LlmBackend::OpenAiCompatible {
-            let base_url =
-                optional_env("LLM_BASE_URL")?.ok_or_else(|| ConfigError::MissingRequired {
+            let base_url = optional_env("LLM_BASE_URL")?
+                .or_else(|| settings.llm_base_url.clone())
+                .ok_or_else(|| ConfigError::MissingRequired {
                     key: "LLM_BASE_URL".to_string(),
                     hint: "Set LLM_BASE_URL when LLM_BACKEND=openai_compatible".to_string(),
                 })?;

@@ -40,8 +40,14 @@ pub struct Settings {
     #[serde(default)]
     pub secrets_master_key_source: KeySource,
 
-    // === Step 3: NEAR AI Auth ===
-    // Session stored separately in session.json
+    // === Step 3: LLM Provider ===
+    /// LLM backend: "nearai", "openai", "anthropic", "ollama", "openai_compatible".
+    #[serde(default)]
+    pub llm_backend: Option<String>,
+
+    /// Base URL for OpenAI-compatible endpoints.
+    #[serde(default)]
+    pub llm_base_url: Option<String>,
 
     // === Step 4: Model Selection ===
     /// Currently selected model.
