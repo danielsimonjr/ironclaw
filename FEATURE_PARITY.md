@@ -41,6 +41,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | launchd/systemd integration | ✅ | ✅ | Service file generation in `src/cli/service.rs` (systemd + launchd) |
 | Bonjour/mDNS discovery | ✅ | 🔮 | Planned |
 | Tailscale integration | ✅ | 🔮 | Planned |
+| Presence system | ✅ | 🔮 | OpenClaw tracks connected clients (macOS, WebChat, CLI) with 5-min TTL |
 | Health check endpoints | ✅ | ✅ | /api/health + /api/gateway/status |
 | `doctor` diagnostics | ✅ | ✅ | `ironclaw doctor` CLI command (`src/cli/doctor.rs`) |
 
@@ -50,9 +51,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 | Channel | OpenClaw | IronClaw | Priority | Notes |
 |---------|----------|----------|----------|-------|
-| CLI/TUI | ✅ | ✅ | - | Ratatui-based TUI |
+| CLI/REPL | ✅ | ✅ | - | Interactive REPL with rustyline, termimad markdown rendering, crossterm, approval cards |
 | HTTP webhook | ✅ | ✅ | - | axum with secret validation |
-| REPL (simple) | ✅ | ✅ | - | For testing |
 | WASM channels | ❌ | ✅ | - | IronClaw innovation |
 | WhatsApp | ✅ | ❌ | P1 | Baileys (Web) |
 | Telegram | ✅ | ✅ | - | WASM channel(MTProto), DM pairing, caption, /start, bot_username |
@@ -82,7 +82,10 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Per-group tool policies | ✅ | ✅ | `GroupPolicyManager` in `src/safety/group_policies.rs` |
 | Thread isolation | ✅ | ✅ | Separate sessions per thread |
 | Per-channel media limits | ✅ | 🚧 | Caption support for media; no size limits |
-| Typing indicators | ✅ | 🚧 | TUI shows status |
+| Typing indicators | ✅ | 🚧 | REPL shows status; channel-level typing indicator management not implemented |
+| Block streaming to channels | ✅ | 🔮 | OpenClaw streams partial text blocks as separate messages with human-like pacing |
+| Channel-level retry | ✅ | 🔮 | OpenClaw has per-provider retry with jitter; IronClaw has LLM-level failover only |
+| Group activation modes | ✅ | 🚧 | `bot_username` mention detection + `respond_to_all_group_messages` config |
 
 ---
 
@@ -94,10 +97,10 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | `tool install/list/remove` | ✅ | ✅ | - | WASM tools |
 | `gateway start/stop/status` | ✅ | ✅ | - | `src/cli/gateway.rs` |
 | `onboard` (wizard) | ✅ | ✅ | - | Interactive setup |
-| `tui` | ✅ | ✅ | - | Ratatui TUI |
+| `tui` | ✅ | ➖ | - | IronClaw uses interactive REPL via default `run` command (no separate `tui` subcommand) |
 | `config` | ✅ | ✅ | - | Read/write config |
 | `channels` | ✅ | ✅ | - | Channel list/status/enable/disable (`src/cli/channels.rs`) |
-| `models` | ✅ | 🚧 | - | Model selector in TUI |
+| `models` | ✅ | 🚧 | - | Model selector via `/model` REPL command; no dedicated CLI subcommand |
 | `status` | ✅ | ✅ | - | System status |
 | `agents` | ✅ | ✅ | - | Agent identity management (`src/cli/agents.rs`) |
 | `sessions` | ✅ | ✅ | - | Session list/prune (`src/cli/sessions.rs`) |
@@ -137,10 +140,14 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Tool-level streaming | ✅ | 🚧 | `ToolStarted`/`ToolCompleted`/`ToolResult` SSE events |
 | Plugin tools | ✅ | ✅ | WASM tools |
 | Tool policies (allow/deny) | ✅ | ✅ | |
-| Exec approvals (`/approve`) | ✅ | ✅ | TUI approval overlay |
+| Exec approvals (`/approve`) | ✅ | ✅ | REPL approval cards with yes/no/always prompts |
 | Elevated mode | ✅ | ✅ | `ElevatedMode` with time-limited activation, per-tool bypass (`src/safety/elevated.rs`) |
 | Subagent support | ✅ | ✅ | Task framework |
 | Auth profiles | ✅ | ✅ | `AuthProfileManager` with per-channel strategies (`src/agent/auth_profiles.rs`) |
+| Session tools | ✅ | 🔮 | OpenClaw has session_list, session_history, session_send, session_spawn tools |
+| Inline chat commands | ✅ | 🚧 | REPL has /help, /model, /undo, /redo, /clear, /compact, etc.; other channels lack inline command parsing |
+| Command queue/lanes | ✅ | 🔮 | OpenClaw has per-session lane-aware FIFO with debounce and message coalescing |
+| Presence tracking | ✅ | 🔮 | OpenClaw tracks connected clients with TTL; IronClaw has WebSocket tracker only |
 
 ---
 
@@ -165,8 +172,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Auto-discovery | ✅ | ✅ | `ModelDiscovery` for OpenAI, Anthropic, Ollama (`src/llm/auto_discovery.rs`) |
 | Failover chains | ✅ | ✅ | `FailoverProvider` with priority ordering (`src/llm/failover.rs`) |
 | Cooldown management | ✅ | ✅ | Exponential backoff per-provider in failover (`src/llm/failover.rs`) |
-| Per-session model override | ✅ | ✅ | Model selector in TUI |
-| Model selection UI | ✅ | ✅ | TUI keyboard shortcut |
+| Per-session model override | ✅ | ✅ | `/model` REPL command |
+| Model selection UI | ✅ | ✅ | REPL `/model` command |
 
 ---
 
@@ -272,7 +279,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Bundled gateway | ✅ | 🚫 | - | |
 | Canvas hosting | ✅ | 🚫 | - | |
 | Voice wake | ✅ | 🚫 | - | |
-| Exec approval dialogs | ✅ | ✅ | - | TUI overlay |
+| Exec approval dialogs | ✅ | ✅ | - | REPL approval cards |
 | iMessage integration | ✅ | 🚫 | - | |
 
 ### Owner: _Unassigned_ (if ever prioritized)
@@ -286,7 +293,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Control UI Dashboard | ✅ | ✅ | - | Web gateway with chat, memory, jobs, logs, extensions |
 | Channel status view | ✅ | 🚧 | P2 | Gateway status widget, full channel view pending |
 | Agent management | ✅ | 🚧 | - | CLI agent management done; web UI pending |
-| Model selection | ✅ | ✅ | - | TUI only |
+| Model selection | ✅ | ✅ | - | REPL `/model` command |
 | Config editing | ✅ | 🔮 | P3 | Web UI planned |
 | Debug/logs viewer | ✅ | ✅ | - | Real-time log streaming with level/target filters |
 | WebChat interface | ✅ | ✅ | - | Web gateway chat with SSE/WebSocket |
@@ -329,7 +336,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | DM pairing verification | ✅ | ✅ | ironclaw pairing approve, host APIs |
 | Allowlist/blocklist | ✅ | 🚧 | allow_from + pairing store |
 | Per-group tool policies | ✅ | ✅ | `GroupPolicyManager` with allow/deny/require-approval (`src/safety/group_policies.rs`) |
-| Exec approvals | ✅ | ✅ | TUI overlay |
+| Exec approvals | ✅ | ✅ | REPL approval cards with yes/no/always |
 | TLS 1.3 minimum | ✅ | ✅ | reqwest rustls |
 | SSRF protection | ✅ | ✅ | WASM allowlist |
 | Loopback-first | ✅ | 🚧 | HTTP binds 0.0.0.0 |
@@ -344,6 +351,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Media URL validation | ✅ | ✅ | `validate_media_url()` in `src/media/detection.rs` |
 | Prompt injection defense | ✅ | ✅ | Pattern detection, sanitization |
 | Leak detection | ✅ | ✅ | Secret exfiltration |
+| Log redaction | ✅ | 🚧 | Field-level `[REDACTED]` in Debug impls for Config, Secrets, OAuth tokens; no systematic log output redaction |
+| Skill vulnerability scanning | ✅ | 🔮 | OpenClaw scans skill code for vulnerabilities; planned |
 
 ---
 
@@ -367,7 +376,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 ## Implementation Priorities
 
 ### P0 - Core (Complete)
-- ✅ TUI channel with approval overlays
+- ✅ REPL channel with approval cards
 - ✅ HTTP webhook channel
 - ✅ DM pairing (ironclaw pairing list/approve, host APIs)
 - ✅ WASM tool sandbox
@@ -411,6 +420,15 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 - 🚧 Full channel status view in web UI
 - 🔮 Canvas hosting (agent-driven UI)
 
+### P2 - Medium Priority (Newly Identified)
+- 🔮 Session tools (session_list, session_history, session_send, session_spawn)
+- 🔮 Presence system (connected client tracking with TTL)
+- 🔮 Command queue / lane system (per-session message coalescing)
+- 🚧 Inline chat commands in non-REPL channels
+- 🚧 Log redaction (systematic sensitive data removal from log output)
+- 🔮 Block streaming to channels (partial text as separate messages)
+- 🔮 Channel-level message delivery retry with backoff
+
 ### P3 - Lower Priority (Remaining)
 - ❌ Messaging channels (Discord, Signal, Matrix, iMessage, etc.)
 - 🔮 AWS Bedrock provider
@@ -421,6 +439,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 - 🔮 Bonjour/mDNS discovery
 - 🔮 Edge TTS
 - 🔮 Gmail pub/sub
+- 🔮 Skill vulnerability scanning
+- 🔮 Usage tracking from provider APIs
 
 ---
 
