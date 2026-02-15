@@ -105,18 +105,24 @@ impl SafetyLayer {
             was_modified = true;
         }
 
-        // Run sanitization once: if injection_check is enabled OR policy requires it
-        if self.config.injection_check_enabled || force_sanitize {
-            let mut sanitized = self.sanitizer.sanitize(&content);
-            sanitized.was_modified = sanitized.was_modified || was_modified;
-            sanitized
-        } else {
-            SanitizedOutput {
-                content,
-                warnings: vec![],
-                was_modified,
+        // Always run the sanitizer for detection. If injection_check is disabled
+        // we still need to detect Critical/High findings — only the lower-severity
+        // escaping can be skipped. This prevents a single env var from silently
+        // disabling all prompt injection defense (Finding 3).
+        let mut sanitized = self.sanitizer.sanitize(&content);
+        if !self.config.injection_check_enabled && !force_sanitize {
+            // Keep warnings for logging but don't modify non-critical content
+            let has_severe = sanitized
+                .warnings
+                .iter()
+                .any(|w| w.severity == Severity::Critical || w.severity == Severity::High);
+            if !has_severe {
+                sanitized.content = content;
+                sanitized.was_modified = was_modified;
             }
         }
+        sanitized.was_modified = sanitized.was_modified || was_modified;
+        sanitized
     }
 
     /// Validate input before processing.

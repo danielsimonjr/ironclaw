@@ -7,6 +7,72 @@ use regex::Regex;
 
 use crate::safety::Severity;
 
+/// Strip zero-width and other invisible Unicode characters that can be used
+/// to bypass pattern matching while remaining semantically meaningful to LLMs.
+fn strip_invisible_chars(s: &str) -> String {
+    s.chars()
+        .filter(|c| {
+            !matches!(
+                *c,
+                '\u{200B}' // zero-width space
+                | '\u{200C}' // zero-width non-joiner
+                | '\u{200D}' // zero-width joiner
+                | '\u{FEFF}' // byte order mark / zero-width no-break space
+                | '\u{00AD}' // soft hyphen
+                | '\u{200E}' // left-to-right mark
+                | '\u{200F}' // right-to-left mark
+                | '\u{202A}' // left-to-right embedding
+                | '\u{202B}' // right-to-left embedding
+                | '\u{202C}' // pop directional formatting
+                | '\u{202D}' // left-to-right override
+                | '\u{202E}' // right-to-left override
+                | '\u{2060}' // word joiner
+                | '\u{2061}' // function application
+                | '\u{2062}' // invisible times
+                | '\u{2063}' // invisible separator
+                | '\u{2064}' // invisible plus
+                | '\u{2066}' // left-to-right isolate
+                | '\u{2067}' // right-to-left isolate
+                | '\u{2068}' // first strong isolate
+                | '\u{2069}' // pop directional isolate
+            )
+        })
+        .collect()
+}
+
+/// Normalize Unicode confusables/homoglyphs to ASCII equivalents for detection.
+fn normalize_confusables(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            // Cyrillic lookalikes
+            '\u{0410}' | '\u{0430}' => 'a',
+            '\u{0412}' | '\u{0432}' => 'b',
+            '\u{0421}' | '\u{0441}' => 'c',
+            '\u{0415}' | '\u{0435}' => 'e',
+            '\u{041D}' | '\u{043D}' => 'h',
+            '\u{041A}' | '\u{043A}' => 'k',
+            '\u{041C}' | '\u{043C}' => 'm',
+            '\u{041E}' | '\u{043E}' => 'o',
+            '\u{0420}' | '\u{0440}' => 'p',
+            '\u{0422}' | '\u{0442}' => 't',
+            '\u{0425}' | '\u{0445}' => 'x',
+            '\u{0423}' | '\u{0443}' => 'y',
+            // Fullwidth ASCII (U+FF01..U+FF5E → U+0021..U+007E)
+            c if ('\u{FF01}'..='\u{FF5E}').contains(&c) => {
+                // Safety: range is checked, cast is in valid ASCII range
+                ((c as u32 - 0xFF01 + 0x21) as u8) as char
+            }
+            other => other,
+        })
+        .collect()
+}
+
+/// Prepare content for pattern matching by stripping invisible chars and
+/// normalizing confusables. Returns the normalized string for detection.
+fn normalize_for_detection(content: &str) -> String {
+    normalize_confusables(&strip_invisible_chars(content))
+}
+
 /// Result of sanitizing external content.
 #[derive(Debug, Clone)]
 pub struct SanitizedOutput {
@@ -164,8 +230,9 @@ impl Sanitizer {
 
         // Regex patterns for more complex detection
         let regex_patterns = vec![
+            // Detect base64 payloads with or without a "base64:" prefix
             RegexPattern {
-                regex: Regex::new(r"(?i)base64[:\s]+[A-Za-z0-9+/=]{50,}").unwrap(),
+                regex: Regex::new(r"(?i)(?:base64[:\s]+)?[A-Za-z0-9+/]{50,}={0,3}").unwrap(),
                 name: "base64_payload".to_string(),
                 severity: Severity::Medium,
                 description: "Potential encoded payload".to_string(),
@@ -188,6 +255,13 @@ impl Sanitizer {
                 severity: Severity::Critical,
                 description: "Null byte injection attempt".to_string(),
             },
+            // Detect dangerous shell commands in code blocks (Finding 27)
+            RegexPattern {
+                regex: Regex::new(r"(?i)```\w*\s*\n?\s*sudo\b").unwrap(),
+                name: "sudo_in_codeblock".to_string(),
+                severity: Severity::Medium,
+                description: "Potential dangerous command injection".to_string(),
+            },
         ];
 
         Self {
@@ -198,11 +272,20 @@ impl Sanitizer {
     }
 
     /// Sanitize content by detecting and escaping potential injection attempts.
+    ///
+    /// Pattern matching runs against a Unicode-normalized copy (invisible chars
+    /// stripped, confusables mapped to ASCII) so that zero-width spaces, Cyrillic
+    /// homoglyphs, and fullwidth characters cannot bypass detection.
+    ///
+    /// On Critical or High severity matches the original content is escaped.
     pub fn sanitize(&self, content: &str) -> SanitizedOutput {
         let mut warnings = Vec::new();
 
-        // Detect patterns using Aho-Corasick
-        for mat in self.pattern_matcher.find_iter(content) {
+        // Normalize for detection: strip invisible chars, map confusables
+        let normalized = normalize_for_detection(content);
+
+        // Detect patterns using Aho-Corasick on normalized content
+        for mat in self.pattern_matcher.find_iter(&normalized) {
             let pattern_info = &self.patterns[mat.pattern().as_usize()];
             warnings.push(InjectionWarning {
                 pattern: pattern_info.pattern.clone(),
@@ -212,9 +295,9 @@ impl Sanitizer {
             });
         }
 
-        // Detect regex patterns
+        // Detect regex patterns on normalized content
         for pattern in &self.regex_patterns {
-            for mat in pattern.regex.find_iter(content) {
+            for mat in pattern.regex.find_iter(&normalized) {
                 warnings.push(InjectionWarning {
                     pattern: pattern.name.clone(),
                     severity: pattern.severity,
@@ -227,11 +310,12 @@ impl Sanitizer {
         // Sort warnings by severity (critical first)
         warnings.sort_by(|a, b| b.severity.cmp(&a.severity));
 
-        // Determine if we need to modify content
-        let has_critical = warnings.iter().any(|w| w.severity == Severity::Critical);
+        // Escape content on Critical or High severity
+        let has_critical_or_high = warnings
+            .iter()
+            .any(|w| w.severity == Severity::Critical || w.severity == Severity::High);
 
-        let (content, was_modified) = if has_critical {
-            // For critical issues, escape the entire content
+        let (content, was_modified) = if has_critical_or_high {
             (self.escape_content(content), true)
         } else {
             (content.to_string(), false)
@@ -251,8 +335,8 @@ impl Sanitizer {
 
     /// Escape content to neutralize potential injections.
     fn escape_content(&self, content: &str) -> String {
-        // Replace special patterns with escaped versions
-        let mut escaped = content.to_string();
+        // Strip invisible Unicode chars that can hide injections
+        let mut escaped = strip_invisible_chars(content);
 
         // Escape special tokens
         escaped = escaped.replace("<|", "\\<|");
@@ -263,24 +347,13 @@ impl Sanitizer {
         // Remove null bytes
         escaped = escaped.replace('\x00', "");
 
-        // Escape role markers at the start of lines
-        let lines: Vec<&str> = escaped.lines().collect();
-        let escaped_lines: Vec<String> = lines
-            .into_iter()
-            .map(|line| {
-                let trimmed = line.trim_start().to_lowercase();
-                if trimmed.starts_with("system:")
-                    || trimmed.starts_with("user:")
-                    || trimmed.starts_with("assistant:")
-                {
-                    format!("[ESCAPED] {}", line)
-                } else {
-                    line.to_string()
-                }
-            })
-            .collect();
+        // Escape role markers both at line start and inline (e.g. mid-sentence
+        // "system:" is also dangerous as LLMs can interpret it as a role boundary).
+        let role_re =
+            Regex::new(r"(?i)\b(system|user|assistant)\s*:").expect("valid role marker regex");
+        escaped = role_re.replace_all(&escaped, "[ESCAPED:$1]:").to_string();
 
-        escaped_lines.join("\n")
+        escaped
     }
 }
 

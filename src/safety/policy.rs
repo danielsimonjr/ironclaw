@@ -132,11 +132,11 @@ impl Default for Policy {
 
         // Add default rules
 
-        // Block attempts to access system files
+        // Block attempts to access system files (expanded from Finding 24)
         policy.add_rule(PolicyRule::new(
             "system_file_access",
             "Attempt to access system files",
-            r"(?i)(/etc/passwd|/etc/shadow|\.ssh/|\.aws/credentials)",
+            r"(?i)(/etc/passwd|/etc/shadow|/proc/self/environ|/proc/self/cmdline|\.ssh/|\.aws/credentials|\.aws/config|\.docker/config\.json|\.kube/config|\.gnupg/|\.netrc|\.env\b)",
             Severity::Critical,
             PolicyAction::Block,
         ));
@@ -159,11 +159,11 @@ impl Default for Policy {
             PolicyAction::Warn,
         ));
 
-        // Block shell command injection patterns
+        // Block shell command injection patterns (expanded: &&, ||, $(), backticks)
         policy.add_rule(PolicyRule::new(
             "shell_injection",
             "Potential shell command injection",
-            r"(?i)(;\s*rm\s+-rf|;\s*curl\s+.*\|\s*sh|`.*`)",
+            r"(?i)(;\s*rm\s+-rf|&&\s*rm\s+-rf|\|\|\s*rm\s+-rf|;\s*curl\s+.*\|\s*sh|&&\s*curl\s+.*\|\s*sh|\$\(.*\)|`[^`]+`)",
             Severity::Critical,
             PolicyAction::Block,
         ));

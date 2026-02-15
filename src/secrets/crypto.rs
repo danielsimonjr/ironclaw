@@ -56,10 +56,11 @@ impl SecretsCrypto {
         Ok(Self { master_key })
     }
 
-    /// Generate a random salt for a new secret.
+    /// Generate a random salt for a new secret using OS-level RNG.
     pub fn generate_salt() -> Vec<u8> {
+        use rand::RngCore;
         let mut salt = vec![0u8; SALT_SIZE];
-        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut salt);
+        OsRng.fill_bytes(&mut salt);
         salt
     }
 
@@ -70,11 +71,15 @@ impl SecretsCrypto {
     /// - salt = random bytes used for key derivation
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>), SecretError> {
         let salt = Self::generate_salt();
-        let derived_key = self.derive_key(&salt)?;
+        let mut derived_key = self.derive_key(&salt)?;
 
         let cipher = Aes256Gcm::new_from_slice(&derived_key).map_err(|e| {
+            // Zero key before returning error
+            derived_key.fill(0);
             SecretError::EncryptionFailed(format!("Failed to create cipher: {}", e))
         })?;
+        // Zero derived key now that cipher has been initialized
+        derived_key.fill(0);
 
         // Generate random nonce
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
@@ -107,11 +112,14 @@ impl SecretsCrypto {
             ));
         }
 
-        let derived_key = self.derive_key(salt)?;
+        let mut derived_key = self.derive_key(salt)?;
 
         let cipher = Aes256Gcm::new_from_slice(&derived_key).map_err(|e| {
+            derived_key.fill(0);
             SecretError::DecryptionFailed(format!("Failed to create cipher: {}", e))
         })?;
+        // Zero derived key material after cipher init
+        derived_key.fill(0);
 
         // Split: nonce || ciphertext
         let (nonce_bytes, ciphertext) = encrypted_value.split_at(NONCE_SIZE);

@@ -4,6 +4,28 @@
 //! Supports exact matches and wildcard patterns.
 
 use std::fmt;
+use std::net::IpAddr;
+
+/// Check if an IP address is in a private or reserved range.
+///
+/// Blocks SSRF to localhost, link-local, private RFC 1918 ranges, and
+/// cloud metadata services (Finding 5).
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()                         // 127.0.0.0/8
+            || v4.is_private()                       // 10/8, 172.16/12, 192.168/16
+            || v4.is_link_local()                    // 169.254.0.0/16
+            || v4.is_unspecified()                    // 0.0.0.0
+            || v4.is_broadcast()                     // 255.255.255.255
+            || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64 // 100.64/10 (CGNAT)
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()                         // ::1
+            || v6.is_unspecified() // ::
+        }
+    }
+}
 
 /// Pattern for matching allowed domains.
 #[derive(Debug, Clone)]
@@ -98,9 +120,20 @@ impl DomainAllowlist {
     }
 
     /// Check if a domain is allowed.
+    ///
+    /// Rejects raw IP addresses (both IPv4 and IPv6) to prevent SSRF bypasses
+    /// where an attacker uses an IP literal instead of a domain name (Finding 5).
     pub fn is_allowed(&self, host: &str) -> DomainValidationResult {
         if self.patterns.is_empty() {
             return DomainValidationResult::Denied("empty allowlist".to_string());
+        }
+
+        // Reject raw IP addresses — allowlist is domain-name-only
+        if host.parse::<IpAddr>().is_ok() {
+            return DomainValidationResult::Denied(format!(
+                "raw IP address '{}' not allowed; use domain names only",
+                host
+            ));
         }
 
         for pattern in &self.patterns {
@@ -118,6 +151,36 @@ impl DomainAllowlist {
                 .collect::<Vec<_>>()
                 .join(", ")
         ))
+    }
+
+    /// Check if a domain is allowed, with DNS resolution to verify the resolved
+    /// IPs are not in private ranges (prevents DNS rebinding attacks — Finding 5).
+    pub async fn is_allowed_with_dns(&self, host: &str) -> DomainValidationResult {
+        // First do the standard domain check
+        let result = self.is_allowed(host);
+        if !result.is_allowed() {
+            return result;
+        }
+
+        // Resolve DNS and check all IPs
+        match tokio::net::lookup_host(format!("{}:443", host)).await {
+            Ok(addrs) => {
+                for addr in addrs {
+                    if is_private_ip(&addr.ip()) {
+                        return DomainValidationResult::Denied(format!(
+                            "domain '{}' resolves to private IP {}",
+                            host,
+                            addr.ip()
+                        ));
+                    }
+                }
+                DomainValidationResult::Allowed
+            }
+            Err(_) => {
+                // DNS resolution failure — fail closed
+                DomainValidationResult::Denied(format!("DNS resolution failed for '{}'", host))
+            }
+        }
     }
 
     /// Get all patterns in the allowlist.

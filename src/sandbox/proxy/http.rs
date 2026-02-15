@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};
+use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
@@ -47,12 +47,30 @@ pub trait CredentialResolver: Send + Sync {
     async fn resolve(&self, name: &str) -> Option<String>;
 }
 
-/// A credential resolver that uses environment variables.
-pub struct EnvCredentialResolver;
+/// A credential resolver that only resolves from a pre-registered set of
+/// environment variable names. This prevents arbitrary env var exfiltration
+/// through HTTP header injection (Finding 23).
+pub struct EnvCredentialResolver {
+    /// The set of allowed env var names (registered from tool capabilities).
+    allowed_names: std::collections::HashSet<String>,
+}
+
+impl EnvCredentialResolver {
+    /// Create a resolver with a fixed set of allowed credential names.
+    pub fn new(allowed_names: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            allowed_names: allowed_names.into_iter().collect(),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl CredentialResolver for EnvCredentialResolver {
     async fn resolve(&self, name: &str) -> Option<String> {
+        if !self.allowed_names.contains(name) {
+            tracing::warn!("Proxy: credential '{}' not in allowed set, denying", name);
+            return None;
+        }
         std::env::var(name).ok()
     }
 }
@@ -268,12 +286,17 @@ async fn handle_connect(
 
     tracing::debug!("Proxy: allowing CONNECT to {}", host);
 
-    // For CONNECT, we return 200 OK and the client will upgrade to TLS
-    // The actual TLS connection goes directly to the target, we just act as a tunnel
-    Response::builder()
-        .status(StatusCode::OK)
-        .body(empty_body())
-        .unwrap()
+    // CONNECT tunneling is not implemented — returning 200 OK without creating
+    // a bidirectional tunnel would mislead the client into thinking a tunnel
+    // exists. Return 502 instead (Finding 7).
+    tracing::warn!(
+        "Proxy: CONNECT tunneling not implemented, returning 502 for {}",
+        host
+    );
+    error_response(
+        StatusCode::BAD_GATEWAY,
+        "CONNECT tunneling is not supported by this proxy".to_string(),
+    )
 }
 
 /// Forward a request to the target server.
@@ -285,8 +308,12 @@ async fn forward_request(
     let method = req.method().clone();
     let uri = req.uri().clone();
 
-    // Build the forwarded request
-    let client = reqwest::Client::new();
+    // Build the forwarded request (redirect following disabled to prevent
+    // allowlisted domains from redirecting to non-allowlisted targets — Finding 4)
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let mut builder = client.request(
         reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET),
         uri.to_string(),
@@ -398,11 +425,6 @@ fn error_response(status: StatusCode, message: String) -> Response<BoxBody<Bytes
         .header("Content-Type", "text/plain")
         .body(full_body(Bytes::from(message)))
         .unwrap()
-}
-
-/// Create an empty body.
-fn empty_body() -> BoxBody<Bytes, Infallible> {
-    Empty::<Bytes>::new().map_err(|_| unreachable!()).boxed()
 }
 
 /// Create a body from bytes.

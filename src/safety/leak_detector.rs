@@ -343,29 +343,47 @@ pub enum LeakDetectionError {
 
 /// Mask a secret for safe display.
 ///
-/// Shows first 4 and last 4 characters, masks the middle.
+/// Shows only the first 4 characters followed by a fixed mask. The suffix is
+/// NOT shown to prevent leaking entropy (Finding 29).
 fn mask_secret(secret: &str) -> String {
     let len = secret.len();
-    if len <= 8 {
+    if len <= 4 {
         return "*".repeat(len);
     }
 
     let prefix: String = secret.chars().take(4).collect();
-    let suffix: String = secret.chars().skip(len - 4).collect();
-    let middle_len = len - 8;
-    format!("{}{}{}", prefix, "*".repeat(middle_len.min(8)), suffix)
+    format!("{}********", prefix)
 }
 
 /// Apply redaction ranges to content.
+///
+/// Merges overlapping ranges before applying so that partially overlapping
+/// matches don't produce garbled output (Finding 28).
 fn apply_redactions(content: &str, ranges: &[Range<usize>]) -> String {
     if ranges.is_empty() {
         return content.to_string();
     }
 
+    // Sort by start position and merge overlapping ranges
+    let mut sorted: Vec<Range<usize>> = ranges.to_vec();
+    sorted.sort_by_key(|r| r.start);
+
+    let mut merged: Vec<Range<usize>> = Vec::with_capacity(sorted.len());
+    for range in sorted {
+        if let Some(last) = merged.last_mut()
+            && range.start <= last.end
+        {
+            // Overlapping or adjacent — extend
+            last.end = last.end.max(range.end);
+            continue;
+        }
+        merged.push(range);
+    }
+
     let mut result = String::with_capacity(content.len());
     let mut last_end = 0;
 
-    for range in ranges {
+    for range in &merged {
         if range.start > last_end {
             result.push_str(&content[last_end..range.start]);
         }
@@ -634,8 +652,10 @@ mod tests {
     fn test_mask_secret() {
         use crate::safety::leak_detector::mask_secret;
 
-        assert_eq!(mask_secret("short"), "*****");
-        assert_eq!(mask_secret("sk-test1234567890abcdef"), "sk-t********cdef");
+        assert_eq!(mask_secret("short"), "shor********");
+        assert_eq!(mask_secret("sk-test1234567890abcdef"), "sk-t********");
+        assert_eq!(mask_secret("abcd"), "****");
+        assert_eq!(mask_secret("ab"), "**");
     }
 
     #[test]

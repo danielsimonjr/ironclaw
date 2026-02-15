@@ -97,7 +97,10 @@ impl std::str::FromStr for SandboxPolicy {
         match s.to_lowercase().as_str() {
             "readonly" | "read_only" | "ro" => Ok(SandboxPolicy::ReadOnly),
             "workspacewrite" | "workspace_write" | "rw" => Ok(SandboxPolicy::WorkspaceWrite),
-            "fullaccess" | "full_access" | "full" | "none" => Ok(SandboxPolicy::FullAccess),
+            "fullaccess" | "full_access" | "full" => Ok(SandboxPolicy::FullAccess),
+            "none" => Err("sandbox policy 'none' is ambiguous and has been removed; \
+                 use 'full_access' to bypass sandboxing or 'readonly' for safe defaults"
+                .to_string()),
             _ => Err(format!(
                 "invalid sandbox policy '{}', expected 'readonly', 'workspace_write', or 'full_access'",
                 s

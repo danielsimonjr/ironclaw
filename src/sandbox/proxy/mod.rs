@@ -57,20 +57,24 @@ pub struct NetworkProxyBuilder {
 impl NetworkProxyBuilder {
     /// Create a new builder with default settings.
     pub fn new() -> Self {
+        let mappings = default_credential_mappings();
+        let allowed_names = mappings.iter().map(|m| m.secret_name.clone());
         Self {
             allowlist: crate::sandbox::config::default_allowlist(),
-            credential_mappings: default_credential_mappings(),
-            credential_resolver: Arc::new(EnvCredentialResolver),
+            credential_resolver: Arc::new(EnvCredentialResolver::new(allowed_names)),
+            credential_mappings: mappings,
             policy: SandboxPolicy::ReadOnly,
         }
     }
 
     /// Create from a sandbox config.
     pub fn from_config(config: &SandboxConfig) -> Self {
+        let mappings = default_credential_mappings();
+        let allowed_names = mappings.iter().map(|m| m.secret_name.clone());
         Self {
             allowlist: config.network_allowlist.clone(),
-            credential_mappings: default_credential_mappings(),
-            credential_resolver: Arc::new(EnvCredentialResolver),
+            credential_resolver: Arc::new(EnvCredentialResolver::new(allowed_names)),
+            credential_mappings: mappings,
             policy: config.policy,
         }
     }

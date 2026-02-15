@@ -144,7 +144,10 @@ pub struct ClientRegistrationResponse {
 }
 
 /// Access token with optional refresh token and expiry.
-#[derive(Debug, Clone)]
+///
+/// Custom `Debug` impl redacts sensitive fields to prevent token leakage
+/// through log statements (Finding 13).
+#[derive(Clone)]
 pub struct AccessToken {
     /// The access token value.
     pub access_token: String,
@@ -160,6 +163,21 @@ pub struct AccessToken {
 
     /// Scopes granted.
     pub scope: Option<String>,
+}
+
+impl std::fmt::Debug for AccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccessToken")
+            .field("access_token", &"[REDACTED]")
+            .field("token_type", &self.token_type)
+            .field("expires_in", &self.expires_in)
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("scope", &self.scope)
+            .finish()
+    }
 }
 
 /// Token response from the authorization server.
@@ -477,6 +495,10 @@ pub async fn find_available_port() -> Result<(TcpListener, u16), AuthError> {
 }
 
 /// Build the authorization URL with all required parameters.
+///
+/// Automatically generates a cryptographic `state` parameter for CSRF
+/// protection unless one is already present in `extra_params` (Finding 12).
+/// Returns `(url, state)` so the caller can validate it on callback.
 pub fn build_authorization_url(
     base_url: &str,
     client_id: &str,
@@ -504,6 +526,15 @@ pub fn build_authorization_url(
             "&code_challenge={}&code_challenge_method=S256",
             pkce.challenge
         ));
+    }
+
+    // Add CSRF-protection `state` if not already provided
+    if !extra_params.contains_key("state") {
+        use rand::RngCore;
+        let mut state_bytes = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut state_bytes);
+        let state: String = state_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+        url.push_str(&format!("&state={}", urlencoding::encode(&state)));
     }
 
     for (key, value) in extra_params {

@@ -104,14 +104,25 @@ impl BootstrapConfig {
         self.save_to(&Self::default_path())
     }
 
-    /// Save to a specific path.
+    /// Save to a specific path with restrictive permissions.
+    ///
+    /// On Unix, the file is created with mode 0o600 (owner read/write only)
+    /// to prevent other users from reading the database URL (Finding 14).
     pub fn save_to(&self, path: &PathBuf) -> std::io::Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
-        std::fs::write(path, json)
+        std::fs::write(path, &json)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+
+        Ok(())
     }
 }
 
