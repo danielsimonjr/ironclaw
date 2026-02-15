@@ -48,7 +48,10 @@ mod repository;
 mod search;
 
 pub use chunker::{ChunkConfig, chunk_document};
-pub use document::{MemoryChunk, MemoryDocument, WorkspaceEntry, paths};
+pub use document::{
+    ConnectionType, DocumentMetadata, MemoryChunk, MemoryConnection, MemoryDocument, MemorySpace,
+    ProfileType, UserProfile, WorkspaceEntry, paths,
+};
 pub use embeddings::{EmbeddingProvider, MockEmbeddings, NearAiEmbeddings, OpenAiEmbeddings};
 #[cfg(feature = "postgres")]
 pub use repository::Repository;
@@ -239,6 +242,164 @@ impl WorkspaceStorage {
                 db.hybrid_search(user_id, agent_id, query, embedding, config)
                     .await
             }
+        }
+    }
+
+    // ==================== Connection Operations ====================
+
+    async fn create_connection(&self, connection: &MemoryConnection) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.create_connection(connection).await,
+            Self::Db(db) => db.create_connection(connection).await,
+        }
+    }
+
+    async fn get_connections(
+        &self,
+        document_id: Uuid,
+    ) -> Result<Vec<MemoryConnection>, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.get_connections(document_id).await,
+            Self::Db(db) => db.get_connections(document_id).await,
+        }
+    }
+
+    async fn delete_connection(&self, id: Uuid) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.delete_connection(id).await,
+            Self::Db(db) => db.delete_connection(id).await,
+        }
+    }
+
+    // ==================== Space Operations ====================
+
+    async fn create_space(&self, space: &MemorySpace) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.create_space(space).await,
+            Self::Db(db) => db.create_space(space).await,
+        }
+    }
+
+    async fn list_spaces(&self, user_id: &str) -> Result<Vec<MemorySpace>, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.list_spaces(user_id).await,
+            Self::Db(db) => db.list_spaces(user_id).await,
+        }
+    }
+
+    async fn get_space_by_name(
+        &self,
+        user_id: &str,
+        name: &str,
+    ) -> Result<Option<MemorySpace>, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.get_space_by_name(user_id, name).await,
+            Self::Db(db) => db.get_space_by_name(user_id, name).await,
+        }
+    }
+
+    async fn add_to_space(&self, space_id: Uuid, document_id: Uuid) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.add_to_space(space_id, document_id).await,
+            Self::Db(db) => db.add_to_space(space_id, document_id).await,
+        }
+    }
+
+    async fn remove_from_space(
+        &self,
+        space_id: Uuid,
+        document_id: Uuid,
+    ) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.remove_from_space(space_id, document_id).await,
+            Self::Db(db) => db.remove_from_space(space_id, document_id).await,
+        }
+    }
+
+    async fn list_space_documents(
+        &self,
+        space_id: Uuid,
+    ) -> Result<Vec<MemoryDocument>, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.list_space_documents(space_id).await,
+            Self::Db(db) => db.list_space_documents(space_id).await,
+        }
+    }
+
+    async fn delete_space(&self, id: Uuid) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.delete_space(id).await,
+            Self::Db(db) => db.delete_space(id).await,
+        }
+    }
+
+    // ==================== Profile Operations ====================
+
+    async fn upsert_profile(&self, profile: &UserProfile) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.upsert_profile(profile).await,
+            Self::Db(db) => db.upsert_profile(profile).await,
+        }
+    }
+
+    async fn get_profile(&self, user_id: &str) -> Result<Vec<UserProfile>, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.get_profile(user_id).await,
+            Self::Db(db) => db.get_profile(user_id).await,
+        }
+    }
+
+    async fn get_profile_by_type(
+        &self,
+        user_id: &str,
+        profile_type: ProfileType,
+    ) -> Result<Vec<UserProfile>, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.get_profile_by_type(user_id, profile_type).await,
+            Self::Db(db) => db.get_profile_by_type(user_id, profile_type).await,
+        }
+    }
+
+    async fn delete_profile_entry(&self, user_id: &str, key: &str) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.delete_profile_entry(user_id, key).await,
+            Self::Db(db) => db.delete_profile_entry(user_id, key).await,
+        }
+    }
+
+    // ==================== Document Metadata Operations ====================
+
+    async fn record_document_access(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.record_document_access(document_id).await,
+            Self::Db(db) => db.record_document_access(document_id).await,
+        }
+    }
+
+    async fn update_document_metadata(
+        &self,
+        document_id: Uuid,
+        metadata: &serde_json::Value,
+    ) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.update_document_metadata(document_id, metadata).await,
+            Self::Db(db) => db.update_document_metadata(document_id, metadata).await,
         }
     }
 }
@@ -761,6 +922,265 @@ impl Workspace {
         }
 
         Ok(count)
+    }
+
+    // ==================== Supermemory: Connections ====================
+
+    /// Create a typed connection between two memory documents.
+    ///
+    /// Connections form a knowledge graph that helps surface related context.
+    /// Three relationship types are supported:
+    /// - **Updates**: New info supersedes old info
+    /// - **Extends**: New info supplements old info
+    /// - **Derives**: Inferred connection from patterns
+    pub async fn connect(
+        &self,
+        source_path: &str,
+        target_path: &str,
+        connection_type: ConnectionType,
+    ) -> Result<MemoryConnection, WorkspaceError> {
+        let source = self.read(source_path).await?;
+        let target = self.read(target_path).await?;
+
+        let connection = MemoryConnection::new(source.id, target.id, connection_type);
+        self.storage.create_connection(&connection).await?;
+
+        tracing::debug!(
+            source = source_path,
+            target = target_path,
+            kind = %connection_type,
+            "Created memory connection"
+        );
+
+        Ok(connection)
+    }
+
+    /// Create a connection between two documents by ID.
+    pub async fn connect_by_id(
+        &self,
+        source_id: Uuid,
+        target_id: Uuid,
+        connection_type: ConnectionType,
+        strength: f32,
+    ) -> Result<MemoryConnection, WorkspaceError> {
+        let connection =
+            MemoryConnection::new(source_id, target_id, connection_type).with_strength(strength);
+        self.storage.create_connection(&connection).await?;
+        Ok(connection)
+    }
+
+    /// Get all connections for a document (as both source and target).
+    pub async fn get_connections(
+        &self,
+        document_id: Uuid,
+    ) -> Result<Vec<MemoryConnection>, WorkspaceError> {
+        self.storage.get_connections(document_id).await
+    }
+
+    /// Delete a connection by ID.
+    pub async fn delete_connection(&self, connection_id: Uuid) -> Result<(), WorkspaceError> {
+        self.storage.delete_connection(connection_id).await
+    }
+
+    // ==================== Supermemory: Spaces ====================
+
+    /// Create a named space for organizing memories.
+    ///
+    /// Spaces are collections that group related memories together.
+    /// A document can belong to multiple spaces.
+    pub async fn create_space(
+        &self,
+        name: &str,
+        description: &str,
+    ) -> Result<MemorySpace, WorkspaceError> {
+        let space = MemorySpace::new(&self.user_id, name).with_description(description);
+        self.storage.create_space(&space).await?;
+        tracing::debug!(name = name, "Created memory space");
+        Ok(space)
+    }
+
+    /// List all spaces for the current user.
+    pub async fn list_spaces(&self) -> Result<Vec<MemorySpace>, WorkspaceError> {
+        self.storage.list_spaces(&self.user_id).await
+    }
+
+    /// Get a space by name.
+    pub async fn get_space(&self, name: &str) -> Result<Option<MemorySpace>, WorkspaceError> {
+        self.storage.get_space_by_name(&self.user_id, name).await
+    }
+
+    /// Add a document to a space.
+    pub async fn add_to_space(&self, space_name: &str, path: &str) -> Result<(), WorkspaceError> {
+        let space = self
+            .storage
+            .get_space_by_name(&self.user_id, space_name)
+            .await?
+            .ok_or_else(|| WorkspaceError::DocumentNotFound {
+                doc_type: format!("space '{}'", space_name),
+                user_id: self.user_id.clone(),
+            })?;
+        let doc = self.read(path).await?;
+        self.storage.add_to_space(space.id, doc.id).await
+    }
+
+    /// Remove a document from a space.
+    pub async fn remove_from_space(
+        &self,
+        space_name: &str,
+        path: &str,
+    ) -> Result<(), WorkspaceError> {
+        let space = self
+            .storage
+            .get_space_by_name(&self.user_id, space_name)
+            .await?
+            .ok_or_else(|| WorkspaceError::DocumentNotFound {
+                doc_type: format!("space '{}'", space_name),
+                user_id: self.user_id.clone(),
+            })?;
+        let doc = self.read(path).await?;
+        self.storage.remove_from_space(space.id, doc.id).await
+    }
+
+    /// List all documents in a space.
+    pub async fn list_space_documents(
+        &self,
+        space_name: &str,
+    ) -> Result<Vec<MemoryDocument>, WorkspaceError> {
+        let space = self
+            .storage
+            .get_space_by_name(&self.user_id, space_name)
+            .await?
+            .ok_or_else(|| WorkspaceError::DocumentNotFound {
+                doc_type: format!("space '{}'", space_name),
+                user_id: self.user_id.clone(),
+            })?;
+        self.storage.list_space_documents(space.id).await
+    }
+
+    /// Delete a space (does not delete the documents in it).
+    pub async fn delete_space(&self, name: &str) -> Result<(), WorkspaceError> {
+        let space = self
+            .storage
+            .get_space_by_name(&self.user_id, name)
+            .await?
+            .ok_or_else(|| WorkspaceError::DocumentNotFound {
+                doc_type: format!("space '{}'", name),
+                user_id: self.user_id.clone(),
+            })?;
+        self.storage.delete_space(space.id).await
+    }
+
+    // ==================== Supermemory: User Profiles ====================
+
+    /// Set or update a user profile fact.
+    ///
+    /// Profile facts are auto-maintained from interactions:
+    /// - **Static**: Stable facts (name, location, preferences)
+    /// - **Dynamic**: Evolving facts (current project, recent activities)
+    pub async fn set_profile_fact(
+        &self,
+        profile_type: ProfileType,
+        key: &str,
+        value: &str,
+        source: &str,
+    ) -> Result<(), WorkspaceError> {
+        let profile = UserProfile::new(&self.user_id, profile_type, key, value).with_source(source);
+        self.storage.upsert_profile(&profile).await
+    }
+
+    /// Get the full user profile.
+    pub async fn get_profile(&self) -> Result<Vec<UserProfile>, WorkspaceError> {
+        self.storage.get_profile(&self.user_id).await
+    }
+
+    /// Get profile facts of a specific type (static or dynamic).
+    pub async fn get_profile_by_type(
+        &self,
+        profile_type: ProfileType,
+    ) -> Result<Vec<UserProfile>, WorkspaceError> {
+        self.storage
+            .get_profile_by_type(&self.user_id, profile_type)
+            .await
+    }
+
+    /// Remove a profile fact by key.
+    pub async fn delete_profile_fact(&self, key: &str) -> Result<(), WorkspaceError> {
+        self.storage.delete_profile_entry(&self.user_id, key).await
+    }
+
+    /// Build a profile summary for injection into LLM context.
+    ///
+    /// Returns a formatted string with static and dynamic facts
+    /// that can be appended to the system prompt.
+    pub async fn profile_summary(&self) -> Result<String, WorkspaceError> {
+        let facts = self.get_profile().await?;
+        if facts.is_empty() {
+            return Ok(String::new());
+        }
+
+        let mut parts = Vec::new();
+        let static_facts: Vec<_> = facts
+            .iter()
+            .filter(|f| f.profile_type == ProfileType::Static)
+            .collect();
+        let dynamic_facts: Vec<_> = facts
+            .iter()
+            .filter(|f| f.profile_type == ProfileType::Dynamic)
+            .collect();
+
+        if !static_facts.is_empty() {
+            let mut section = String::from("**User Facts:**\n");
+            for fact in &static_facts {
+                section.push_str(&format!("- {}: {}\n", fact.key, fact.value));
+            }
+            parts.push(section);
+        }
+
+        if !dynamic_facts.is_empty() {
+            let mut section = String::from("**Current Context:**\n");
+            for fact in &dynamic_facts {
+                section.push_str(&format!("- {}: {}\n", fact.key, fact.value));
+            }
+            parts.push(section);
+        }
+
+        Ok(parts.join("\n"))
+    }
+
+    // ==================== Supermemory: Document Metadata ====================
+
+    /// Record that a document was accessed (for importance/recency tracking).
+    pub async fn record_access(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
+        self.storage.record_document_access(document_id).await
+    }
+
+    /// Update the metadata for a document (tags, importance, source_url, event_date).
+    pub async fn update_metadata(
+        &self,
+        path: &str,
+        metadata: &DocumentMetadata,
+    ) -> Result<(), WorkspaceError> {
+        let doc = self.read(path).await?;
+        let json = metadata.merge_into(&doc.metadata);
+        self.storage.update_document_metadata(doc.id, &json).await
+    }
+
+    // ==================== Enhanced System Prompt ====================
+
+    /// Build the system prompt including user profile context.
+    ///
+    /// Extends the base system prompt with profile facts for
+    /// personalized agent behavior.
+    pub async fn system_prompt_with_profile(&self) -> Result<String, WorkspaceError> {
+        let mut prompt = self.system_prompt().await?;
+
+        let profile = self.profile_summary().await?;
+        if !profile.is_empty() {
+            prompt.push_str("\n\n---\n\n## User Profile\n\n");
+            prompt.push_str(&profile);
+        }
+
+        Ok(prompt)
     }
 }
 

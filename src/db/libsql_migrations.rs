@@ -523,6 +523,82 @@ CREATE INDEX IF NOT EXISTS idx_routine_runs_status ON routine_runs(status);
 -- heartbeat_state
 CREATE INDEX IF NOT EXISTS idx_heartbeat_next_run ON heartbeat_state(next_run);
 
+-- ==================== Supermemory: Memory Connections ====================
+
+CREATE TABLE IF NOT EXISTS memory_connections (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES memory_documents(id) ON DELETE CASCADE,
+    target_id TEXT NOT NULL REFERENCES memory_documents(id) ON DELETE CASCADE,
+    connection_type TEXT NOT NULL CHECK (connection_type IN ('updates', 'extends', 'derives')),
+    strength REAL NOT NULL DEFAULT 1.0,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (source_id, target_id, connection_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_connections_source ON memory_connections(source_id);
+CREATE INDEX IF NOT EXISTS idx_memory_connections_target ON memory_connections(target_id);
+CREATE INDEX IF NOT EXISTS idx_memory_connections_type ON memory_connections(connection_type);
+
+-- ==================== Supermemory: Memory Spaces ====================
+
+CREATE TABLE IF NOT EXISTS memory_spaces (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_spaces_user ON memory_spaces(user_id);
+
+CREATE TRIGGER IF NOT EXISTS update_memory_spaces_updated_at
+    AFTER UPDATE ON memory_spaces
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
+    BEGIN
+        UPDATE memory_spaces SET updated_at = datetime('now') WHERE id = NEW.id;
+    END;
+
+-- ==================== Supermemory: Space Membership ====================
+
+CREATE TABLE IF NOT EXISTS memory_space_members (
+    space_id TEXT NOT NULL REFERENCES memory_spaces(id) ON DELETE CASCADE,
+    document_id TEXT NOT NULL REFERENCES memory_documents(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (space_id, document_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_space_members_doc ON memory_space_members(document_id);
+
+-- ==================== Supermemory: User Profiles ====================
+
+CREATE TABLE IF NOT EXISTS memory_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    profile_type TEXT NOT NULL CHECK (profile_type IN ('static', 'dynamic')),
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    source TEXT NOT NULL DEFAULT 'user_stated',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_profiles_user ON memory_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_memory_profiles_type ON memory_profiles(user_id, profile_type);
+
+CREATE TRIGGER IF NOT EXISTS update_memory_profiles_updated_at
+    AFTER UPDATE ON memory_profiles
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
+    BEGIN
+        UPDATE memory_profiles SET updated_at = datetime('now') WHERE id = NEW.id;
+    END;
+
 -- ==================== Seed data ====================
 
 -- Pre-populate leak detection patterns (matches PostgreSQL V2 migration).

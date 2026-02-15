@@ -18,7 +18,7 @@ use async_trait::async_trait;
 
 use crate::context::JobContext;
 use crate::tools::tool::{Tool, ToolError, ToolOutput};
-use crate::workspace::{Workspace, paths};
+use crate::workspace::{ConnectionType, ProfileType, Workspace, paths};
 
 /// Identity files that the LLM must not overwrite via tool calls.
 /// These are loaded into the system prompt and could be used for prompt
@@ -479,6 +479,606 @@ impl Tool for MemoryTreeTool {
 
     fn requires_sanitization(&self) -> bool {
         false // Internal tool
+    }
+}
+
+// ==================== Supermemory-inspired tools ====================
+
+/// Tool for creating typed connections between memory documents.
+///
+/// Connections form a knowledge graph: memories can update, extend, or derive
+/// from each other. This helps surface related context during search.
+pub struct MemoryConnectTool {
+    workspace: Arc<Workspace>,
+}
+
+impl MemoryConnectTool {
+    /// Create a new memory connect tool.
+    pub fn new(workspace: Arc<Workspace>) -> Self {
+        Self { workspace }
+    }
+}
+
+#[async_trait]
+impl Tool for MemoryConnectTool {
+    fn name(&self) -> &str {
+        "memory_connect"
+    }
+
+    fn description(&self) -> &str {
+        "Create, list, or delete connections between memory documents. Connections form a \
+         knowledge graph. Types: 'updates' (new info supersedes old), 'extends' (supplements \
+         existing), 'derives' (inferred pattern). Use 'list' action to see existing connections."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create", "list", "delete"],
+                    "description": "Action to perform",
+                    "default": "create"
+                },
+                "source_path": {
+                    "type": "string",
+                    "description": "Path of the source document (for create)"
+                },
+                "target_path": {
+                    "type": "string",
+                    "description": "Path of the target document (for create)"
+                },
+                "connection_type": {
+                    "type": "string",
+                    "enum": ["updates", "extends", "derives"],
+                    "description": "Type of connection (for create)",
+                    "default": "extends"
+                },
+                "document_path": {
+                    "type": "string",
+                    "description": "Path of document to list connections for (for list)"
+                },
+                "connection_id": {
+                    "type": "string",
+                    "description": "UUID of connection to delete (for delete)"
+                }
+            },
+            "required": ["action"]
+        })
+    }
+
+    async fn execute(
+        &self,
+        params: serde_json::Value,
+        _ctx: &JobContext,
+    ) -> Result<ToolOutput, ToolError> {
+        let start = std::time::Instant::now();
+
+        let action = params
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("create");
+
+        match action {
+            "create" => {
+                let source_path = params
+                    .get("source_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters("missing 'source_path' for create".to_string())
+                    })?;
+                let target_path = params
+                    .get("target_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters("missing 'target_path' for create".to_string())
+                    })?;
+                let ct_str = params
+                    .get("connection_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("extends");
+                let connection_type = ConnectionType::from_str_loose(ct_str).ok_or_else(|| {
+                    ToolError::InvalidParameters(format!(
+                        "invalid connection_type '{}'. Use: updates, extends, derives",
+                        ct_str
+                    ))
+                })?;
+
+                let conn = self
+                    .workspace
+                    .connect(source_path, target_path, connection_type)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("Create connection failed: {}", e))
+                    })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "status": "created",
+                        "connection_id": conn.id.to_string(),
+                        "source": source_path,
+                        "target": target_path,
+                        "type": ct_str,
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "list" => {
+                let doc_path = params
+                    .get("document_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters("missing 'document_path' for list".to_string())
+                    })?;
+                let doc = self.workspace.read(doc_path).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Read document failed: {}", e))
+                })?;
+
+                let connections = self.workspace.get_connections(doc.id).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("List connections failed: {}", e))
+                })?;
+
+                let output: Vec<serde_json::Value> = connections
+                    .iter()
+                    .map(|c| {
+                        serde_json::json!({
+                            "id": c.id.to_string(),
+                            "source_id": c.source_id.to_string(),
+                            "target_id": c.target_id.to_string(),
+                            "type": c.connection_type.to_string(),
+                            "strength": c.strength,
+                            "created_at": c.created_at.to_rfc3339(),
+                        })
+                    })
+                    .collect();
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "document": doc_path,
+                        "connections": output,
+                        "count": connections.len(),
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "delete" => {
+                let conn_id_str = params
+                    .get("connection_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters(
+                            "missing 'connection_id' for delete".to_string(),
+                        )
+                    })?;
+                let conn_id = uuid::Uuid::parse_str(conn_id_str).map_err(|_| {
+                    ToolError::InvalidParameters(format!("invalid UUID: '{}'", conn_id_str))
+                })?;
+
+                self.workspace
+                    .delete_connection(conn_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("Delete connection failed: {}", e))
+                    })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({ "status": "deleted", "connection_id": conn_id_str }),
+                    start.elapsed(),
+                ))
+            }
+            other => Err(ToolError::InvalidParameters(format!(
+                "unknown action '{}'. Use: create, list, delete",
+                other
+            ))),
+        }
+    }
+
+    fn requires_sanitization(&self) -> bool {
+        false
+    }
+}
+
+/// Tool for managing memory spaces (named collections).
+///
+/// Spaces let users organize memories into thematic collections.
+/// A document can belong to multiple spaces.
+pub struct MemorySpacesTool {
+    workspace: Arc<Workspace>,
+}
+
+impl MemorySpacesTool {
+    /// Create a new memory spaces tool.
+    pub fn new(workspace: Arc<Workspace>) -> Self {
+        Self { workspace }
+    }
+}
+
+#[async_trait]
+impl Tool for MemorySpacesTool {
+    fn name(&self) -> &str {
+        "memory_spaces"
+    }
+
+    fn description(&self) -> &str {
+        "Manage memory spaces (named collections). Create spaces to organize memories by \
+         topic/project. Add or remove documents from spaces. List spaces and their contents."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create", "list", "add", "remove", "contents", "delete"],
+                    "description": "Action to perform"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Space name (for create, add, remove, contents, delete)"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Space description (for create)"
+                },
+                "document_path": {
+                    "type": "string",
+                    "description": "Document path to add/remove from a space"
+                }
+            },
+            "required": ["action"]
+        })
+    }
+
+    async fn execute(
+        &self,
+        params: serde_json::Value,
+        _ctx: &JobContext,
+    ) -> Result<ToolOutput, ToolError> {
+        let start = std::time::Instant::now();
+
+        let action = params
+            .get("action")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                ToolError::InvalidParameters("missing 'action' parameter".to_string())
+            })?;
+
+        match action {
+            "create" => {
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'name' for create".to_string())
+                })?;
+                let description = params
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                let space = self
+                    .workspace
+                    .create_space(name, description)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("Create space failed: {}", e))
+                    })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "status": "created",
+                        "space_id": space.id.to_string(),
+                        "name": name,
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "list" => {
+                let spaces = self.workspace.list_spaces().await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("List spaces failed: {}", e))
+                })?;
+
+                let output: Vec<serde_json::Value> = spaces
+                    .iter()
+                    .map(|s| {
+                        serde_json::json!({
+                            "id": s.id.to_string(),
+                            "name": s.name,
+                            "description": s.description,
+                            "created_at": s.created_at.to_rfc3339(),
+                        })
+                    })
+                    .collect();
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "spaces": output,
+                        "count": spaces.len(),
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "add" => {
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'name' for add".to_string())
+                })?;
+                let doc_path = params
+                    .get("document_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters("missing 'document_path' for add".to_string())
+                    })?;
+
+                self.workspace
+                    .add_to_space(name, doc_path)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("Add to space failed: {}", e))
+                    })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "status": "added",
+                        "space": name,
+                        "document": doc_path,
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "remove" => {
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'name' for remove".to_string())
+                })?;
+                let doc_path = params
+                    .get("document_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters(
+                            "missing 'document_path' for remove".to_string(),
+                        )
+                    })?;
+
+                self.workspace
+                    .remove_from_space(name, doc_path)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("Remove from space failed: {}", e))
+                    })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "status": "removed",
+                        "space": name,
+                        "document": doc_path,
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "contents" => {
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'name' for contents".to_string())
+                })?;
+
+                let docs = self
+                    .workspace
+                    .list_space_documents(name)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("List space contents failed: {}", e))
+                    })?;
+
+                let output: Vec<serde_json::Value> = docs
+                    .iter()
+                    .map(|d| {
+                        serde_json::json!({
+                            "path": d.path,
+                            "word_count": d.word_count(),
+                            "updated_at": d.updated_at.to_rfc3339(),
+                        })
+                    })
+                    .collect();
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "space": name,
+                        "documents": output,
+                        "count": docs.len(),
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "delete" => {
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'name' for delete".to_string())
+                })?;
+
+                self.workspace.delete_space(name).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Delete space failed: {}", e))
+                })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({ "status": "deleted", "space": name }),
+                    start.elapsed(),
+                ))
+            }
+            other => Err(ToolError::InvalidParameters(format!(
+                "unknown action '{}'. Use: create, list, add, remove, contents, delete",
+                other
+            ))),
+        }
+    }
+
+    fn requires_sanitization(&self) -> bool {
+        false
+    }
+}
+
+/// Tool for managing the auto-maintained user profile.
+///
+/// Profiles contain facts about the user organized into static (stable)
+/// and dynamic (evolving) categories.
+pub struct MemoryProfileTool {
+    workspace: Arc<Workspace>,
+}
+
+impl MemoryProfileTool {
+    /// Create a new memory profile tool.
+    pub fn new(workspace: Arc<Workspace>) -> Self {
+        Self { workspace }
+    }
+}
+
+#[async_trait]
+impl Tool for MemoryProfileTool {
+    fn name(&self) -> &str {
+        "memory_profile"
+    }
+
+    fn description(&self) -> &str {
+        "Manage the user's profile (auto-maintained facts). Use to store user preferences, \
+         context, and facts. Static facts (name, location) rarely change. Dynamic facts \
+         (current project, recent focus) evolve. Use 'set' to add/update, 'get' to read, \
+         'delete' to remove."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["set", "get", "delete"],
+                    "description": "Action to perform"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Profile fact key (e.g., 'name', 'location', 'current_project')"
+                },
+                "value": {
+                    "type": "string",
+                    "description": "Profile fact value (for set)"
+                },
+                "profile_type": {
+                    "type": "string",
+                    "enum": ["static", "dynamic"],
+                    "description": "Fact type: 'static' for stable facts, 'dynamic' for evolving ones",
+                    "default": "static"
+                },
+                "source": {
+                    "type": "string",
+                    "description": "How this fact was learned: 'user_stated', 'inferred', 'observed'",
+                    "default": "user_stated"
+                }
+            },
+            "required": ["action"]
+        })
+    }
+
+    async fn execute(
+        &self,
+        params: serde_json::Value,
+        _ctx: &JobContext,
+    ) -> Result<ToolOutput, ToolError> {
+        let start = std::time::Instant::now();
+
+        let action = params
+            .get("action")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                ToolError::InvalidParameters("missing 'action' parameter".to_string())
+            })?;
+
+        match action {
+            "set" => {
+                let key = params.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'key' for set".to_string())
+                })?;
+                let value = params
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters("missing 'value' for set".to_string())
+                    })?;
+                let pt_str = params
+                    .get("profile_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("static");
+                let profile_type = if pt_str == "dynamic" {
+                    ProfileType::Dynamic
+                } else {
+                    ProfileType::Static
+                };
+                let source = params
+                    .get("source")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("user_stated");
+
+                self.workspace
+                    .set_profile_fact(profile_type, key, value, source)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!("Set profile failed: {}", e))
+                    })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "status": "set",
+                        "key": key,
+                        "value": value,
+                        "type": pt_str,
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "get" => {
+                let facts = self.workspace.get_profile().await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Get profile failed: {}", e))
+                })?;
+
+                let output: Vec<serde_json::Value> = facts
+                    .iter()
+                    .map(|f| {
+                        serde_json::json!({
+                            "key": f.key,
+                            "value": f.value,
+                            "type": f.profile_type.to_string(),
+                            "confidence": f.confidence,
+                            "source": f.source,
+                            "updated_at": f.updated_at.to_rfc3339(),
+                        })
+                    })
+                    .collect();
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({
+                        "facts": output,
+                        "count": facts.len(),
+                    }),
+                    start.elapsed(),
+                ))
+            }
+            "delete" => {
+                let key = params.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    ToolError::InvalidParameters("missing 'key' for delete".to_string())
+                })?;
+
+                self.workspace.delete_profile_fact(key).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Delete profile entry failed: {}", e))
+                })?;
+
+                Ok(ToolOutput::success(
+                    serde_json::json!({ "status": "deleted", "key": key }),
+                    start.elapsed(),
+                ))
+            }
+            other => Err(ToolError::InvalidParameters(format!(
+                "unknown action '{}'. Use: set, get, delete",
+                other
+            ))),
+        }
+    }
+
+    fn requires_sanitization(&self) -> bool {
+        false
     }
 }
 
