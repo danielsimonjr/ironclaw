@@ -12,7 +12,9 @@
 
 mod agent_loop;
 pub mod auth_profiles;
+pub mod command_queue;
 pub mod compaction;
+pub mod config_reload;
 pub mod context_monitor;
 mod heartbeat;
 pub mod multi_agent;
@@ -31,7 +33,11 @@ pub mod worker;
 
 pub(crate) use agent_loop::truncate_for_preview;
 pub use agent_loop::{Agent, AgentDeps};
+pub use command_queue::{
+    CommandLane, CommandQueue, QueueConfig, QueueStats, QueuedCommand, classify_lane,
+};
 pub use compaction::{CompactionResult, ContextCompactor};
+pub use config_reload::spawn_config_reload_task;
 pub use context_monitor::{CompactionStrategy, ContextBreakdown, ContextMonitor};
 pub use heartbeat::{HeartbeatConfig, HeartbeatResult, HeartbeatRunner, spawn_heartbeat};
 pub use multi_agent::{AgentIdentity, AgentRouter, RoutingDecision, RoutingStrategy};

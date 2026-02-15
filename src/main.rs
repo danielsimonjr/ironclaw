@@ -380,6 +380,21 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e));
         }
+        Some(Command::Nodes(nodes_cmd)) => {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+                )
+                .init();
+
+            return ironclaw::cli::run_nodes_command(nodes_cmd)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
+        Some(Command::Browser(browser_cmd)) => {
+            return ironclaw::cli::run_browser_command(browser_cmd.clone())
+                .map_err(|e| anyhow::anyhow!("{}", e));
+        }
         Some(Command::Completion { shell }) => {
             return ironclaw::cli::generate_completions(shell);
         }

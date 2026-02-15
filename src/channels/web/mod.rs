@@ -15,6 +15,8 @@
 //! ```
 
 pub mod auth;
+pub mod canvas;
+pub mod config_editor;
 pub mod log_layer;
 pub mod openai_compat;
 pub mod pid_lock;

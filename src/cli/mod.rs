@@ -20,8 +20,10 @@
 //! - Webhook management (`webhooks list`, `webhooks add`, `webhooks remove`)
 //! - Skills management (`skills list`, `skills enable`, `skills disable`)
 //! - Agent management (`agents list`, `agents info`, `agents set-default`)
+//! - Node management (`nodes list`, `nodes add`, `nodes remove`, `nodes ping`)
 
 mod agents;
+mod browser;
 mod channels;
 mod completion;
 mod config;
@@ -33,6 +35,7 @@ mod logs;
 mod mcp;
 pub mod memory;
 mod message;
+mod nodes;
 mod pairing;
 mod plugins;
 mod service;
@@ -43,6 +46,7 @@ mod tool;
 mod webhooks;
 
 pub use agents::{AgentsCommand, run_agents_command};
+pub use browser::{BrowserCommand, run_browser_command};
 pub use channels::{ChannelsCommand, run_channels_command};
 pub use completion::generate_completions;
 pub use config::{ConfigCommand, run_config_command};
@@ -57,6 +61,7 @@ pub use memory::MemoryCommand;
 pub use memory::run_memory_command;
 pub use memory::run_memory_command_with_db;
 pub use message::{MessageCommand, run_message_command};
+pub use nodes::{Node, NodeManager, NodeStatus, NodesCommand, run_nodes_command};
 pub use pairing::{PairingCommand, run_pairing_command, run_pairing_command_with_store};
 pub use plugins::{PluginsCommand, run_plugins_command};
 pub use service::{
@@ -187,6 +192,14 @@ pub enum Command {
     /// Manage agent identities
     #[command(subcommand)]
     Agents(AgentsCommand),
+
+    /// Manage remote IronClaw nodes
+    #[command(subcommand)]
+    Nodes(NodesCommand),
+
+    /// Manage browser automation sessions
+    #[command(subcommand)]
+    Browser(BrowserCommand),
 
     /// Generate shell completion scripts
     Completion {

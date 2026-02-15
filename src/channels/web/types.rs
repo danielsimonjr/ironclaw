@@ -191,6 +191,25 @@ pub enum SseEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         session_id: Option<String>,
     },
+
+    /// Channel status update broadcast.
+    #[serde(rename = "channel_status")]
+    ChannelStatus { channels: Vec<ChannelStatusInfo> },
+
+    /// Configuration value changed.
+    #[serde(rename = "config_changed")]
+    ConfigChanged {
+        key: String,
+        value: serde_json::Value,
+    },
+
+    // Canvas (A2UI) events
+    #[serde(rename = "canvas_created")]
+    CanvasCreated { canvas_id: String, title: String },
+    #[serde(rename = "canvas_updated")]
+    CanvasUpdated { canvas_id: String, version: u32 },
+    #[serde(rename = "canvas_deleted")]
+    CanvasDeleted { canvas_id: String },
 }
 
 // --- Memory ---
@@ -498,6 +517,11 @@ impl WsServerMessage {
             SseEvent::JobToolResult { .. } => "job_tool_result",
             SseEvent::JobStatus { .. } => "job_status",
             SseEvent::JobResult { .. } => "job_result",
+            SseEvent::ChannelStatus { .. } => "channel_status",
+            SseEvent::ConfigChanged { .. } => "config_changed",
+            SseEvent::CanvasCreated { .. } => "canvas_created",
+            SseEvent::CanvasUpdated { .. } => "canvas_updated",
+            SseEvent::CanvasDeleted { .. } => "canvas_deleted",
         };
         let data = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
         WsServerMessage::Event {
@@ -595,6 +619,150 @@ pub struct SettingsImportRequest {
 #[derive(Debug, Serialize)]
 pub struct SettingsExportResponse {
     pub settings: std::collections::HashMap<String, serde_json::Value>,
+}
+
+// --- Channel Status ---
+
+/// Full channel status information.
+#[derive(Debug, Clone, Serialize)]
+pub struct ChannelStatusInfo {
+    pub name: String,
+    /// "connected", "disconnected", or "error"
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connected_since: Option<String>,
+    pub message_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_message_at: Option<String>,
+    pub error_count: u64,
+    pub metadata: serde_json::Value,
+}
+
+/// Comprehensive gateway status response.
+#[derive(Debug, Serialize)]
+pub struct FullGatewayStatusResponse {
+    pub uptime_secs: u64,
+    pub sse_clients: u64,
+    pub ws_clients: u64,
+    pub log_clients: u64,
+    pub channels: Vec<ChannelStatusInfo>,
+    pub presence: Vec<PresenceInfo>,
+    /// Messages per minute throughput.
+    pub message_throughput: f64,
+    pub active_sessions: u64,
+    pub active_jobs: u64,
+}
+
+/// Presence info for a connected client.
+#[derive(Debug, Clone, Serialize)]
+pub struct PresenceInfo {
+    pub instance_id: String,
+    pub client_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub connected_at: String,
+    pub last_seen: String,
+}
+
+// --- Canvas (A2UI) ---
+
+/// Request to create a new canvas.
+#[derive(Debug, Deserialize)]
+pub struct CreateCanvasRequest {
+    pub title: String,
+    pub content_type: String,
+    pub html: String,
+    pub css: Option<String>,
+    pub js: Option<String>,
+}
+
+/// Summary info for a canvas, returned in list responses.
+#[derive(Debug, Serialize)]
+pub struct CanvasInfo {
+    pub id: Uuid,
+    pub title: String,
+    pub content_type: String,
+    pub version: u32,
+    pub pinned: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Response containing a list of canvases.
+#[derive(Debug, Serialize)]
+pub struct CanvasListResponse {
+    pub canvases: Vec<CanvasInfo>,
+}
+
+// --- Configuration ---
+
+/// Full configuration response for web UI editing.
+#[derive(Debug, Serialize)]
+pub struct ConfigResponse {
+    pub sections: Vec<ConfigSection>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigSection {
+    pub name: String,
+    pub description: String,
+    pub fields: Vec<ConfigField>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigField {
+    pub key: String,
+    pub label: String,
+    pub description: String,
+    pub field_type: ConfigFieldType,
+    pub value: serde_json::Value,
+    pub default_value: serde_json::Value,
+    pub required: bool,
+    pub sensitive: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigFieldType {
+    String,
+    Integer,
+    Float,
+    Boolean,
+    Select { options: Vec<String> },
+    Secret,
+    Duration,
+    Url,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigUpdateRequest {
+    pub key: String,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigBatchUpdateRequest {
+    pub updates: Vec<ConfigUpdateRequest>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigUpdateResponse {
+    pub key: String,
+    pub success: bool,
+    pub message: String,
+    pub previous_value: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigValidationResponse {
+    pub valid: bool,
+    pub errors: Vec<ConfigValidationError>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigValidationError {
+    pub key: String,
+    pub message: String,
 }
 
 // --- Health ---

@@ -33,10 +33,10 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | HTTP endpoints for Control UI | ✅ | ✅ | Web dashboard with chat, memory, jobs, logs, extensions |
 | Channel connection lifecycle | ✅ | ✅ | ChannelManager + WebSocket tracker |
 | Session management/routing | ✅ | ✅ | SessionManager exists |
-| Configuration hot-reload | ✅ | 🚧 | Infrastructure in `src/hot_reload.rs` (ConfigWatcher, ReloadEvent), wiring in progress |
+| Configuration hot-reload | ✅ | ✅ | `ConfigWatcher` + `config_reload::spawn_config_reload_task()` wired into agent loop (`src/agent/config_reload.rs`) |
 | Network modes (loopback/LAN/remote) | ✅ | 🚧 | HTTP only |
 | OpenAI-compatible HTTP API | ✅ | ✅ | /v1/chat/completions |
-| Canvas hosting | ✅ | 🔮 | Agent-driven UI, planned |
+| Canvas hosting | ✅ | ✅ | `CanvasManager` with A2UI (agent-driven UI) (`src/channels/web/canvas.rs`) |
 | Gateway lock (PID-based) | ✅ | ✅ | `PidLock` in `src/channels/web/pid_lock.rs` |
 | launchd/systemd integration | ✅ | ✅ | Service file generation in `src/cli/service.rs` (systemd + launchd) |
 | Bonjour/mDNS discovery | ✅ | 🔮 | Planned |
@@ -83,8 +83,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Thread isolation | ✅ | ✅ | Separate sessions per thread |
 | Per-channel media limits | ✅ | 🚧 | Caption support for media; no size limits |
 | Typing indicators | ✅ | 🚧 | REPL shows status; channel-level typing indicator management not implemented |
-| Block streaming to channels | ✅ | 🔮 | OpenClaw streams partial text blocks as separate messages with human-like pacing |
-| Channel-level retry | ✅ | 🔮 | OpenClaw has per-provider retry with jitter; IronClaw has LLM-level failover only |
+| Block streaming to channels | ✅ | ✅ | `BlockStreamer` with paragraph/sentence/word splitting and configurable pacing (`src/channels/block_streamer.rs`) |
+| Channel-level retry | ✅ | ✅ | `DeliveryRetryManager` with exponential backoff + jitter per channel (`src/channels/delivery_retry.rs`) |
 | Group activation modes | ✅ | 🚧 | `bot_username` mention detection + `respond_to_all_group_messages` config |
 
 ---
@@ -107,13 +107,13 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | `memory` | ✅ | ✅ | - | search, read, write, tree, status, spaces, profile, connect |
 | `skills` | ✅ | ✅ | - | Skill list/enable/disable/info (`src/cli/skills.rs`) |
 | `pairing` | ✅ | ✅ | - | list/approve for channel DM pairing |
-| `nodes` | ✅ | 🔮 | P3 | Device management |
+| `nodes` | ✅ | ✅ | - | `NodeManager` with device list/add/remove/ping/pair (`src/cli/nodes.rs`) |
 | `plugins` | ✅ | ✅ | - | Plugin list/install/remove/info/update (`src/cli/plugins.rs`) |
 | `hooks` | ✅ | ✅ | - | Lifecycle hook list/add/remove (`src/cli/hooks.rs`) |
 | `cron` | ✅ | ✅ | - | Routine list/enable/disable/history (`src/cli/cron.rs`) |
 | `webhooks` | ✅ | ✅ | - | Webhook list/add/remove/test (`src/cli/webhooks.rs`) |
 | `message send` | ✅ | ✅ | - | Send to channels (`src/cli/message.rs`) |
-| `browser` | ✅ | 🔮 | P3 | Browser automation |
+| `browser` | ✅ | ✅ | - | `BrowserTool` with session management (`src/tools/builtin/browser.rs`) |
 | `sandbox` | ✅ | ✅ | - | WASM sandbox |
 | `doctor` | ✅ | ✅ | - | Comprehensive diagnostics (`src/cli/doctor.rs`) |
 | `logs` | ✅ | ✅ | - | Log tail/search/job (`src/cli/logs.rs`) |
@@ -145,8 +145,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Subagent support | ✅ | ✅ | Task framework |
 | Auth profiles | ✅ | ✅ | `AuthProfileManager` with per-channel strategies (`src/agent/auth_profiles.rs`) |
 | Session tools | ✅ | ✅ | `SessionListTool`, `SessionHistoryTool`, `SessionSendTool` (`src/tools/builtin/session_tools.rs`) |
-| Inline chat commands | ✅ | 🚧 | REPL has /help, /model, /undo, /redo, /clear, /compact, etc.; other channels lack inline command parsing |
-| Command queue/lanes | ✅ | 🔮 | OpenClaw has per-session lane-aware FIFO with debounce and message coalescing |
+| Inline chat commands | ✅ | ✅ | `parse_inline_command()` with portable slash command parsing across all channels (`src/channels/inline_commands.rs`) |
+| Command queue/lanes | ✅ | ✅ | `CommandQueue` with per-session lane-aware FIFO, debounce, message coalescing (`src/agent/command_queue.rs`) |
 | Presence tracking | ✅ | ✅ | `PresenceTracker` with TTL-based expiry, capacity eviction (`src/channels/web/presence.rs`) |
 
 ---
@@ -188,7 +188,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | MIME detection | ✅ | ✅ | - | `detect_mime_type` with magic byte detection (`src/media/detection.rs`) |
 | Media caching | ✅ | ✅ | - | `MediaCache` with TTL, LRU eviction, size limits (`src/media/cache.rs`) |
 | Vision model integration | ✅ | ✅ | - | `OpenAiVisionProvider` for GPT-4V/Claude vision (`src/media/vision.rs`) |
-| TTS (Edge TTS) | ✅ | 🔮 | P3 | Planned |
+| TTS (Edge TTS) | ✅ | ✅ | - | `EdgeTtsProvider` with 10 voices, SSML generation (`src/media/edge_tts.rs`) |
 | TTS (OpenAI) | ✅ | ✅ | - | `OpenAiTtsProvider` with voice/format options (`src/media/tts.rs`) |
 | Sticker-to-image | ✅ | ✅ | - | `StickerConverter` for WebP/TGS/animated WebP (`src/media/sticker.rs`) |
 
@@ -203,11 +203,11 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | HTTP path registration | ✅ | 🚧 | `PluginRoute` framework in `src/extensions/plugins.rs` |
 | Workspace-relative install | ✅ | ✅ | ~/.ironclaw/tools/ |
 | Channel plugins | ✅ | ✅ | WASM channels |
-| Auth plugins | ✅ | 🔮 | Planned |
-| Memory plugins | ✅ | 🔮 | Custom backends, planned |
+| Auth plugins | ✅ | ✅ | `PluginManager` with auth plugin lifecycle (`src/extensions/plugin_manager.rs`) |
+| Memory plugins | ✅ | ✅ | `PluginManager` with memory plugin lifecycle (`src/extensions/plugin_manager.rs`) |
 | Tool plugins | ✅ | ✅ | WASM tools |
-| Hook plugins | ✅ | 🚧 | HookEngine framework exists (`src/hooks/engine.rs`) |
-| Provider plugins | ✅ | 🔮 | Planned |
+| Hook plugins | ✅ | ✅ | `PluginManager` + `HookEngine` with bundled hooks (`src/hooks/bundled.rs`) |
+| Provider plugins | ✅ | ✅ | `PluginManager` with provider plugin lifecycle (`src/extensions/plugin_manager.rs`) |
 | Plugin CLI (`install`, `list`) | ✅ | ✅ | `tool` + `plugins` subcommands |
 | ClawHub registry | ✅ | 🔮 | Discovery, planned |
 
@@ -222,7 +222,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | YAML alternative | ✅ | ✅ | `serde_yaml` crate integrated in Cargo.toml |
 | Environment variable interpolation | ✅ | ✅ | `${VAR}` |
 | Config validation/schema | ✅ | ✅ | Type-safe Config struct |
-| Hot-reload | ✅ | 🚧 | `ConfigWatcher` infrastructure in `src/hot_reload.rs` |
+| Hot-reload | ✅ | ✅ | `ConfigWatcher` + `spawn_config_reload_task()` wired into agent (`src/agent/config_reload.rs`) |
 | Legacy migration | ✅ | ➖ | |
 | State directory | ✅ `~/.openclaw-state/` | ✅ `~/.ironclaw/` | |
 | Credentials directory | ✅ | ✅ | Session files |
@@ -291,13 +291,13 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Feature | OpenClaw | IronClaw | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | Control UI Dashboard | ✅ | ✅ | - | Web gateway with chat, memory, jobs, logs, extensions |
-| Channel status view | ✅ | 🚧 | P2 | Gateway status widget, full channel view pending |
+| Channel status view | ✅ | ✅ | - | `ChannelStatusTracker` with per-channel metrics, SSE events (`src/channels/status_tracker.rs`) |
 | Agent management | ✅ | 🚧 | - | CLI agent management done; web UI pending |
 | Model selection | ✅ | ✅ | - | REPL `/model` command |
-| Config editing | ✅ | 🔮 | P3 | Web UI planned |
+| Config editing | ✅ | ✅ | - | `build_config_schema()` + `validate_config_update()` with 9 sections (`src/channels/web/config_editor.rs`) |
 | Debug/logs viewer | ✅ | ✅ | - | Real-time log streaming with level/target filters |
 | WebChat interface | ✅ | ✅ | - | Web gateway chat with SSE/WebSocket |
-| Canvas system (A2UI) | ✅ | 🔮 | P3 | Agent-driven UI, planned |
+| Canvas system (A2UI) | ✅ | ✅ | - | `CanvasManager` with HTML/Markdown/Chart/Form content types (`src/channels/web/canvas.rs`) |
 
 ---
 
@@ -314,10 +314,10 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | `onMessage` hook | ✅ | ✅ | - | Routines with event trigger |
 | `onSessionStart` hook | ✅ | ✅ | - | `HookEngine::run_on_session_start` |
 | `onSessionEnd` hook | ✅ | ✅ | - | `HookEngine::run_on_session_end` |
-| `transcribeAudio` hook | ✅ | 🚧 | P3 | HookType registered, handler pending |
+| `transcribeAudio` hook | ✅ | ✅ | - | `run_transcribe_audio()` handler with audio download + provider dispatch (`src/hooks/transcribe.rs`) |
 | `transformResponse` hook | ✅ | ✅ | - | `HookEngine::run_transform_response` |
-| Bundled hooks | ✅ | 🚧 | P2 | Framework exists, expanding library |
-| Plugin hooks | ✅ | 🚧 | P3 | HookEngine + plugin framework exists |
+| Bundled hooks | ✅ | ✅ | - | 8 pre-built hooks: profanity_filter, response_length_guard, sensitive_data_redactor, etc. (`src/hooks/bundled.rs`) |
+| Plugin hooks | ✅ | ✅ | - | `PluginManager` Hook type + `HookEngine` integration (`src/extensions/plugin_manager.rs`) |
 | Workspace hooks | ✅ | ✅ | - | `HookSource::Workspace` with `HookAction` support |
 | Outbound webhooks | ✅ | ✅ | - | `WebhookManager` with HMAC signing, retry (`src/hooks/webhooks.rs`) |
 | Heartbeat system | ✅ | ✅ | - | Periodic execution |
@@ -352,7 +352,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Prompt injection defense | ✅ | ✅ | Pattern detection, sanitization |
 | Leak detection | ✅ | ✅ | Secret exfiltration |
 | Log redaction | ✅ | ✅ | `LogRedactor` with regex patterns for API keys, Bearer tokens, JWTs, AWS keys, emails, passwords (`src/safety/log_redaction.rs`) |
-| Skill vulnerability scanning | ✅ | 🔮 | OpenClaw scans skill code for vulnerabilities; planned |
+| Skill vulnerability scanning | ✅ | ✅ | `VulnerabilityScanner` with 10 default rules, severity levels (`src/skills/vulnerability_scanner.rs`) |
 
 ---
 
@@ -415,31 +415,34 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 ### P1 - High Priority (Remaining)
 - ❌ WhatsApp channel
 
-### P2 - Medium Priority (Remaining)
-- 🚧 Configuration hot-reload (wiring to running agent)
-- 🚧 Full channel status view in web UI
-- 🔮 Canvas hosting (agent-driven UI)
-
-### P2 - Medium Priority (Newly Identified)
+### P2 - Medium Priority (Complete)
+- ✅ Configuration hot-reload (wired to running agent)
+- ✅ Full channel status view in web UI
+- ✅ Canvas hosting (agent-driven UI)
 - ✅ Session tools (session_list, session_history, session_send)
 - ✅ Presence system (connected client tracking with TTL)
 - ✅ Log redaction (LogRedactor with regex-based sensitive data removal)
-- 🔮 Command queue / lane system (per-session message coalescing)
-- 🚧 Inline chat commands in non-REPL channels
-- 🔮 Block streaming to channels (partial text as separate messages)
-- 🔮 Channel-level message delivery retry with backoff
+- ✅ Command queue / lane system (per-session message coalescing)
+- ✅ Inline chat commands in non-REPL channels
+- ✅ Block streaming to channels (partial text as separate messages)
+- ✅ Channel-level message delivery retry with backoff
+- ✅ Bundled hooks library (8 pre-built hooks)
+- ✅ Config editing via web UI
+- ✅ Auth/Memory/Provider plugins
+- ✅ Browser automation
+- ✅ Edge TTS
+- ✅ Skill vulnerability scanning
+- ✅ Nodes CLI (device management)
+- ✅ transcribeAudio hook handler
 
 ### P3 - Lower Priority (Remaining)
 - ❌ Messaging channels (Discord, Signal, Matrix, iMessage, etc.)
 - 🔮 AWS Bedrock provider
 - 🔮 Google Gemini provider
 - 🔮 Gemini/local embeddings
-- 🔮 Browser automation
 - 🔮 Tailscale integration
 - 🔮 Bonjour/mDNS discovery
-- 🔮 Edge TTS
 - 🔮 Gmail pub/sub
-- 🔮 Skill vulnerability scanning
 - 🔮 Usage tracking from provider APIs
 
 ---
