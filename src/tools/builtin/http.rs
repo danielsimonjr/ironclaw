@@ -64,17 +64,33 @@ fn validate_url(url: &str) -> Result<reqwest::Url, ToolError> {
 
     // Resolve hostname and check all resolved IPs against the blocklist.
     // This prevents DNS rebinding where a hostname resolves to a private IP.
+    // DNS resolution failure now blocks the request (fail closed — Finding 35).
     let port = parsed.port_or_known_default().unwrap_or(443);
     let socket_addr = format!("{}:{}", host, port);
-    if let Ok(addrs) = socket_addr.to_socket_addrs() {
-        for addr in addrs {
-            if is_disallowed_ip(&addr.ip()) {
+    match socket_addr.to_socket_addrs() {
+        Ok(addrs) => {
+            let addrs: Vec<_> = addrs.collect();
+            if addrs.is_empty() {
                 return Err(ToolError::NotAuthorized(format!(
-                    "hostname '{}' resolves to disallowed IP {}",
-                    host,
-                    addr.ip()
+                    "hostname '{}' did not resolve to any addresses",
+                    host
                 )));
             }
+            for addr in &addrs {
+                if is_disallowed_ip(&addr.ip()) {
+                    return Err(ToolError::NotAuthorized(format!(
+                        "hostname '{}' resolves to disallowed IP {}",
+                        host,
+                        addr.ip()
+                    )));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(ToolError::NotAuthorized(format!(
+                "DNS resolution failed for '{}': {} — request blocked",
+                host, e
+            )));
         }
     }
 
@@ -297,8 +313,16 @@ mod tests {
 
     #[test]
     fn test_validate_url_accepts_https_public() {
-        let url = validate_url("https://example.com").unwrap();
-        assert_eq!(url.host_str(), Some("example.com"));
+        // DNS may not be available in CI/sandboxed environments.
+        // Both outcomes are valid: success (public IP) or DNS failure (fail-closed).
+        match validate_url("https://example.com") {
+            Ok(url) => assert_eq!(url.host_str(), Some("example.com")),
+            Err(e) => assert!(
+                e.to_string().contains("DNS resolution failed"),
+                "unexpected error: {}",
+                e
+            ),
+        }
     }
 
     #[test]

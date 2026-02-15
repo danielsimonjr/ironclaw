@@ -173,7 +173,13 @@ async fn webhook_handler(
     // Validate secret if configured
     if let Some(ref expected_secret) = state.webhook_secret {
         match &req.secret {
-            Some(provided) if provided == expected_secret => {
+            Some(provided)
+                if {
+                    // Constant-time comparison prevents timing attacks (Finding 20)
+                    use subtle::ConstantTimeEq;
+                    provided.as_bytes().ct_eq(expected_secret.as_bytes()).into()
+                } =>
+            {
                 // Secret matches, continue
             }
             Some(_) => {

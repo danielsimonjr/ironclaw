@@ -128,26 +128,25 @@ impl Validator {
             });
         }
 
-        // Check length
-        if input.len() > self.max_length {
+        // Check length in characters (not bytes) for consistent cross-encoding behavior
+        let char_count = input.chars().count();
+        if char_count > self.max_length {
             result = result.merge(ValidationResult::error(ValidationError {
                 field: "input".to_string(),
                 message: format!(
-                    "Input too long: {} bytes (max {})",
-                    input.len(),
-                    self.max_length
+                    "Input too long: {} chars (max {})",
+                    char_count, self.max_length
                 ),
                 code: ValidationErrorCode::TooLong,
             }));
         }
 
-        if input.len() < self.min_length {
+        if char_count < self.min_length {
             result = result.merge(ValidationResult::error(ValidationError {
                 field: "input".to_string(),
                 message: format!(
-                    "Input too short: {} bytes (min {})",
-                    input.len(),
-                    self.min_length
+                    "Input too short: {} chars (min {})",
+                    char_count, self.min_length
                 ),
                 code: ValidationErrorCode::TooShort,
             }));
@@ -193,12 +192,24 @@ impl Validator {
     pub fn validate_tool_params(&self, params: &serde_json::Value) -> ValidationResult {
         let mut result = ValidationResult::ok();
 
-        // Recursively check all string values in the JSON
+        /// Maximum JSON nesting depth to prevent stack overflow via deeply nested payloads.
+        const MAX_DEPTH: usize = 32;
+
+        // Recursively check all string values in the JSON with depth limit
         fn check_strings(
             value: &serde_json::Value,
             validator: &Validator,
             result: &mut ValidationResult,
+            depth: usize,
         ) {
+            if depth > MAX_DEPTH {
+                *result = std::mem::take(result).merge(ValidationResult::error(ValidationError {
+                    field: "input".to_string(),
+                    message: format!("JSON nesting exceeds maximum depth of {}", MAX_DEPTH),
+                    code: ValidationErrorCode::SuspiciousPattern,
+                }));
+                return;
+            }
             match value {
                 serde_json::Value::String(s) => {
                     let string_result = validator.validate(s);
@@ -206,19 +217,19 @@ impl Validator {
                 }
                 serde_json::Value::Array(arr) => {
                     for item in arr {
-                        check_strings(item, validator, result);
+                        check_strings(item, validator, result, depth + 1);
                     }
                 }
                 serde_json::Value::Object(obj) => {
                     for (_, v) in obj {
-                        check_strings(v, validator, result);
+                        check_strings(v, validator, result, depth + 1);
                     }
                 }
                 _ => {}
             }
         }
 
-        check_strings(params, self, &mut result);
+        check_strings(params, self, &mut result, 0);
         result
     }
 }

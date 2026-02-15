@@ -601,13 +601,29 @@ pub struct HttpConfig {
 }
 
 /// Web gateway configuration.
-#[derive(Debug, Clone)]
+///
+/// Custom `Debug` redacts `auth_token` to prevent leakage in logs (Finding 34).
+#[derive(Clone)]
 pub struct GatewayConfig {
     pub host: String,
     pub port: u16,
     /// Bearer token for authentication. Random hex generated at startup if unset.
     pub auth_token: Option<String>,
     pub user_id: String,
+}
+
+impl std::fmt::Debug for GatewayConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GatewayConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field(
+                "auth_token",
+                &self.auth_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("user_id", &self.user_id)
+            .finish()
+    }
 }
 
 impl ChannelsConfig {

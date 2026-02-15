@@ -106,7 +106,15 @@ impl ToolRegistry {
     }
 
     /// Unregister a tool.
+    ///
+    /// Refuses to unregister built-in/protected tools (Finding 18).
     pub async fn unregister(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        if let Ok(builtins) = self.builtin_names.try_read()
+            && builtins.contains(name)
+        {
+            tracing::warn!("Refused to unregister protected built-in tool: {}", name);
+            return None;
+        }
         self.tools.write().await.remove(name)
     }
 

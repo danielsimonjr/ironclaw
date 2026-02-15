@@ -77,30 +77,41 @@ impl RateLimiter {
     }
 
     /// Try to consume one request. Returns `true` if allowed, `false` if rate limited.
+    ///
+    /// Uses CAS for the window reset to prevent TOCTOU races where two threads
+    /// both detect an expired window and double the effective quota (Finding 8).
     pub fn check(&self) -> bool {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        let window = self.window_start.load(Ordering::Relaxed);
+        let window = self.window_start.load(Ordering::Acquire);
         if now.saturating_sub(window) >= self.window_secs {
-            // Window expired, reset
-            self.window_start.store(now, Ordering::Relaxed);
-            self.remaining
-                .store(self.max_requests - 1, Ordering::Relaxed);
-            return true;
+            // Try to atomically reset the window. Only one thread wins the CAS.
+            if self
+                .window_start
+                .compare_exchange(window, now, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                // We won the reset — set remaining (minus 1 for this request)
+                self.remaining
+                    .store(self.max_requests - 1, Ordering::Release);
+                return true;
+            }
+            // Lost the CAS — another thread reset the window, fall through to
+            // the decrement loop with the new window's remaining count.
         }
 
         // Try to decrement remaining
         loop {
-            let current = self.remaining.load(Ordering::Relaxed);
+            let current = self.remaining.load(Ordering::Acquire);
             if current == 0 {
                 return false;
             }
             if self
                 .remaining
-                .compare_exchange_weak(current, current - 1, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange_weak(current, current - 1, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
             {
                 return true;
@@ -287,12 +298,38 @@ pub async fn start_server(
         ]))
         .allow_credentials(true);
 
+    // Security response headers (Finding 39)
+    let security_headers = tower_http::set_header::SetResponseHeaderLayer::overriding(
+        header::HeaderName::from_static("x-content-type-options"),
+        header::HeaderValue::from_static("nosniff"),
+    );
+    let frame_options = tower_http::set_header::SetResponseHeaderLayer::overriding(
+        header::HeaderName::from_static("x-frame-options"),
+        header::HeaderValue::from_static("DENY"),
+    );
+    let referrer_policy = tower_http::set_header::SetResponseHeaderLayer::overriding(
+        header::HeaderName::from_static("referrer-policy"),
+        header::HeaderValue::from_static("no-referrer"),
+    );
+    // CSP: allow inline styles/scripts for the simple gateway UI, but restrict
+    // external script sources to the marked CDN with SRI enforcement.
+    let csp = tower_http::set_header::SetResponseHeaderLayer::overriding(
+        header::HeaderName::from_static("content-security-policy"),
+        header::HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+        ),
+    );
+
     let app = Router::new()
         .merge(public)
         .merge(statics)
         .merge(projects)
         .merge(protected)
         .layer(cors)
+        .layer(security_headers)
+        .layer(frame_options)
+        .layer(referrer_policy)
+        .layer(csp)
         .layer(DefaultBodyLimit::max(1024 * 1024)) // 1 MB max request body
         .with_state(state.clone());
 
@@ -1177,7 +1214,11 @@ async fn jobs_detail_handler(
             started_at: job.started_at.map(|dt| dt.to_rfc3339()),
             completed_at: job.completed_at.map(|dt| dt.to_rfc3339()),
             elapsed_secs,
-            project_dir: Some(job.project_dir.clone()),
+            // Expose only the project directory basename, not the full server
+            // filesystem path (Finding 42).
+            project_dir: std::path::Path::new(&job.project_dir)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string()),
             browse_url: Some(format!("/projects/{}/", browse_id)),
             job_mode: {
                 let mode = store.get_sandbox_job_mode(job.id).await.ok().flatten();
@@ -1867,6 +1908,11 @@ async fn routines_detail_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Routine not found".to_string()))?;
 
+    // Verify ownership (Finding 19)
+    if routine.user_id != state.user_id {
+        return Err((StatusCode::NOT_FOUND, "Routine not found".to_string()));
+    }
+
     let runs = store
         .list_routine_runs(routine_id, 20)
         .await
@@ -1920,6 +1966,11 @@ async fn routines_trigger_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Routine not found".to_string()))?;
+
+    // Verify ownership (Finding 19)
+    if routine.user_id != state.user_id {
+        return Err((StatusCode::NOT_FOUND, "Routine not found".to_string()));
+    }
 
     // Send the routine prompt through the message pipeline as a manual trigger.
     let prompt = match &routine.action {
@@ -1975,6 +2026,11 @@ async fn routines_toggle_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Routine not found".to_string()))?;
 
+    // Verify ownership (Finding 19)
+    if routine.user_id != state.user_id {
+        return Err((StatusCode::NOT_FOUND, "Routine not found".to_string()));
+    }
+
     // If a specific value was provided, use it; otherwise toggle.
     routine.enabled = match body {
         Some(Json(req)) => req.enabled.unwrap_or(!routine.enabled),
@@ -2004,6 +2060,16 @@ async fn routines_delete_handler(
     let routine_id = Uuid::parse_str(&id)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid routine ID".to_string()))?;
 
+    // Verify ownership before deletion (Finding 19)
+    let routine = store
+        .get_routine(routine_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Routine not found".to_string()))?;
+    if routine.user_id != state.user_id {
+        return Err((StatusCode::NOT_FOUND, "Routine not found".to_string()));
+    }
+
     let deleted = store
         .delete_routine(routine_id)
         .await
@@ -2030,6 +2096,16 @@ async fn routines_runs_handler(
 
     let routine_id = Uuid::parse_str(&id)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid routine ID".to_string()))?;
+
+    // Verify ownership (Finding 19)
+    let routine = store
+        .get_routine(routine_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Routine not found".to_string()))?;
+    if routine.user_id != state.user_id {
+        return Err((StatusCode::NOT_FOUND, "Routine not found".to_string()));
+    }
 
     let runs = store
         .list_routine_runs(routine_id, 50)

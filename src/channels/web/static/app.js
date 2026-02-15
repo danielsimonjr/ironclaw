@@ -292,24 +292,41 @@ function renderMarkdown(text) {
 
 // Strip dangerous HTML elements and attributes from rendered markdown.
 // This prevents XSS from tool output or prompt injection in LLM responses.
+// Uses a DOM-based approach rather than regex for more robust sanitization (Finding 22).
 function sanitizeRenderedHtml(html) {
-  html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  html = html.replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '');
-  html = html.replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '');
-  html = html.replace(/<embed\b[^>]*\/?>/gi, '');
-  html = html.replace(/<form\b[^>]*>[\s\S]*?<\/form>/gi, '');
-  html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  html = html.replace(/<link\b[^>]*\/?>/gi, '');
-  html = html.replace(/<base\b[^>]*\/?>/gi, '');
-  html = html.replace(/<meta\b[^>]*\/?>/gi, '');
-  // Remove event handler attributes (onclick, onerror, onload, etc.)
-  html = html.replace(/\s+on\w+\s*=\s*"[^"]*"/gi, '');
-  html = html.replace(/\s+on\w+\s*=\s*'[^']*'/gi, '');
-  html = html.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
-  // Remove javascript: and data: URLs in href/src attributes
-  html = html.replace(/(href|src|action)\s*=\s*["']?\s*javascript\s*:/gi, '$1="');
-  html = html.replace(/(href|src|action)\s*=\s*["']?\s*data\s*:/gi, '$1="');
-  return html;
+  var parser = new DOMParser();
+  var doc = parser.parseFromString(html, 'text/html');
+
+  // Elements to remove entirely (including children)
+  var dangerousTags = ['script', 'iframe', 'object', 'embed', 'form',
+    'style', 'link', 'base', 'meta', 'svg', 'math', 'template'];
+  dangerousTags.forEach(function(tag) {
+    var els = doc.body.querySelectorAll(tag);
+    els.forEach(function(el) { el.remove(); });
+  });
+
+  // Remove all event handler attributes and dangerous URL schemes
+  var allElements = doc.body.querySelectorAll('*');
+  allElements.forEach(function(el) {
+    var attrs = Array.from(el.attributes);
+    attrs.forEach(function(attr) {
+      var name = attr.name.toLowerCase();
+      // Remove any on* event handler (onclick, onerror, onload, etc.)
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+        return;
+      }
+      // Remove dangerous URL schemes from href/src/action
+      if (['href', 'src', 'action', 'formaction', 'xlink:href'].indexOf(name) !== -1) {
+        var value = (attr.value || '').trim().toLowerCase();
+        if (value.startsWith('javascript:') || value.startsWith('data:') || value.startsWith('vbscript:')) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    });
+  });
+
+  return doc.body.innerHTML;
 }
 
 function copyCodeBlock(btn) {

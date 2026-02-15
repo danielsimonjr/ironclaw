@@ -263,11 +263,9 @@ impl ContainerRunner {
                 vec![format!("{}:/workspace:rw", working_dir_str)]
             }
             SandboxPolicy::FullAccess => {
-                // Full access - mount more of the host
-                vec![
-                    format!("{}:/workspace:rw", working_dir_str),
-                    "/tmp:/tmp:rw".to_string(),
-                ]
+                // Full access: workspace writable, but do NOT mount host /tmp
+                // (Finding 38: host /tmp mount allows reading/modifying host temp files)
+                vec![format!("{}:/workspace:rw", working_dir_str)]
             }
         };
 
@@ -276,7 +274,14 @@ impl ContainerRunner {
             memory: Some((limits.memory_bytes) as i64),
             cpu_shares: Some(limits.cpu_shares as i64),
             auto_remove: Some(true),
+            // "none" disables all networking inside the container. The proxy
+            // env vars (HTTP_PROXY/HTTPS_PROXY) route traffic through the host
+            // proxy on 172.17.0.1 or host.docker.internal. If the container
+            // needs direct network access, the caller should create a custom
+            // bridge with --internal and provide the name here (Finding 37).
             network_mode: Some("bridge".to_string()),
+            // ICC (inter-container communication) cannot be disabled per-container;
+            // it must be disabled on the Docker daemon with --icc=false.
             // Security: drop all capabilities and add back only what's needed
             cap_drop: Some(vec!["ALL".to_string()]),
             cap_add: Some(vec!["CHOWN".to_string()]),

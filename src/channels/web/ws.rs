@@ -116,11 +116,33 @@ pub async fn handle_ws_connection(socket: WebSocket, state: Arc<GatewayState>) {
         }
     });
 
-    // Receiver task: read client frames and route to agent
+    // Receiver task: read client frames and route to agent.
+    // Rate-limited to prevent flooding via WebSocket (Finding 41).
     let user_id = state.user_id.clone();
+    let mut ws_msg_count: u64 = 0;
+    let mut ws_window_start = std::time::Instant::now();
+    let ws_rate_limit: u64 = 30;
+    let ws_rate_window = std::time::Duration::from_secs(60);
+
     while let Some(Ok(frame)) = ws_stream.next().await {
+        // Reset window if expired
+        if ws_window_start.elapsed() >= ws_rate_window {
+            ws_msg_count = 0;
+            ws_window_start = std::time::Instant::now();
+        }
+
         match frame {
             Message::Text(text) => {
+                ws_msg_count += 1;
+                if ws_msg_count > ws_rate_limit {
+                    let _ = direct_tx
+                        .send(WsServerMessage::Error {
+                            message: "Rate limit exceeded".to_string(),
+                        })
+                        .await;
+                    continue;
+                }
+
                 let parsed: Result<WsClientMessage, _> = serde_json::from_str(&text);
                 match parsed {
                     Ok(client_msg) => {

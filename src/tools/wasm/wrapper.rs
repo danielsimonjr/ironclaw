@@ -549,6 +549,12 @@ impl Tool for WasmToolWrapper {
         }
     }
 
+    fn requires_approval(&self) -> bool {
+        // WASM tools execute untrusted code and make external HTTP requests.
+        // Require approval by default (Finding 15).
+        true
+    }
+
     fn requires_sanitization(&self) -> bool {
         // WASM tools always require sanitization, they're untrusted by definition
         true
