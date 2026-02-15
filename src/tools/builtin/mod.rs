@@ -11,6 +11,7 @@ mod marketplace;
 mod memory;
 mod restaurant;
 pub mod routine;
+mod session_tools;
 pub(crate) mod shell;
 mod taskrabbit;
 mod time;
@@ -33,6 +34,7 @@ pub use restaurant::RestaurantTool;
 pub use routine::{
     RoutineCreateTool, RoutineDeleteTool, RoutineHistoryTool, RoutineListTool, RoutineUpdateTool,
 };
+pub use session_tools::{SessionHistoryTool, SessionListTool, SessionSendTool};
 pub use shell::ShellTool;
 pub use taskrabbit::TaskRabbitTool;
 pub use time::TimeTool;

@@ -41,7 +41,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | launchd/systemd integration | ✅ | ✅ | Service file generation in `src/cli/service.rs` (systemd + launchd) |
 | Bonjour/mDNS discovery | ✅ | 🔮 | Planned |
 | Tailscale integration | ✅ | 🔮 | Planned |
-| Presence system | ✅ | 🔮 | OpenClaw tracks connected clients (macOS, WebChat, CLI) with 5-min TTL |
+| Presence system | ✅ | ✅ | `PresenceTracker` with TTL expiry, capacity eviction (`src/channels/web/presence.rs`) |
 | Health check endpoints | ✅ | ✅ | /api/health + /api/gateway/status |
 | `doctor` diagnostics | ✅ | ✅ | `ironclaw doctor` CLI command (`src/cli/doctor.rs`) |
 
@@ -144,10 +144,10 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Elevated mode | ✅ | ✅ | `ElevatedMode` with time-limited activation, per-tool bypass (`src/safety/elevated.rs`) |
 | Subagent support | ✅ | ✅ | Task framework |
 | Auth profiles | ✅ | ✅ | `AuthProfileManager` with per-channel strategies (`src/agent/auth_profiles.rs`) |
-| Session tools | ✅ | 🔮 | OpenClaw has session_list, session_history, session_send, session_spawn tools |
+| Session tools | ✅ | ✅ | `SessionListTool`, `SessionHistoryTool`, `SessionSendTool` (`src/tools/builtin/session_tools.rs`) |
 | Inline chat commands | ✅ | 🚧 | REPL has /help, /model, /undo, /redo, /clear, /compact, etc.; other channels lack inline command parsing |
 | Command queue/lanes | ✅ | 🔮 | OpenClaw has per-session lane-aware FIFO with debounce and message coalescing |
-| Presence tracking | ✅ | 🔮 | OpenClaw tracks connected clients with TTL; IronClaw has WebSocket tracker only |
+| Presence tracking | ✅ | ✅ | `PresenceTracker` with TTL-based expiry, capacity eviction (`src/channels/web/presence.rs`) |
 
 ---
 
@@ -351,7 +351,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Media URL validation | ✅ | ✅ | `validate_media_url()` in `src/media/detection.rs` |
 | Prompt injection defense | ✅ | ✅ | Pattern detection, sanitization |
 | Leak detection | ✅ | ✅ | Secret exfiltration |
-| Log redaction | ✅ | 🚧 | Field-level `[REDACTED]` in Debug impls for Config, Secrets, OAuth tokens; no systematic log output redaction |
+| Log redaction | ✅ | ✅ | `LogRedactor` with regex patterns for API keys, Bearer tokens, JWTs, AWS keys, emails, passwords (`src/safety/log_redaction.rs`) |
 | Skill vulnerability scanning | ✅ | 🔮 | OpenClaw scans skill code for vulnerabilities; planned |
 
 ---
@@ -421,11 +421,11 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 - 🔮 Canvas hosting (agent-driven UI)
 
 ### P2 - Medium Priority (Newly Identified)
-- 🔮 Session tools (session_list, session_history, session_send, session_spawn)
-- 🔮 Presence system (connected client tracking with TTL)
+- ✅ Session tools (session_list, session_history, session_send)
+- ✅ Presence system (connected client tracking with TTL)
+- ✅ Log redaction (LogRedactor with regex-based sensitive data removal)
 - 🔮 Command queue / lane system (per-session message coalescing)
 - 🚧 Inline chat commands in non-REPL channels
-- 🚧 Log redaction (systematic sensitive data removal from log output)
 - 🔮 Block streaming to channels (partial text as separate messages)
 - 🔮 Channel-level message delivery retry with backoff
 

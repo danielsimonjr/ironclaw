@@ -18,6 +18,7 @@ pub mod auth;
 pub mod log_layer;
 pub mod openai_compat;
 pub mod pid_lock;
+pub mod presence;
 pub mod server;
 pub mod sse;
 pub mod types;
