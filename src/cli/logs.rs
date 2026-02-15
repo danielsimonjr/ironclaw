@@ -89,10 +89,10 @@ async fn tail_logs(
                     return false;
                 }
             }
-            if let Some(ref tgt) = target {
-                if !line.contains(tgt) {
-                    return false;
-                }
+            if let Some(ref tgt) = target
+                && !line.contains(tgt)
+            {
+                return false;
             }
             true
         })

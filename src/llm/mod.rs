@@ -7,6 +7,7 @@
 //! - **Ollama**: Local model inference
 //! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI API
 
+pub mod auto_discovery;
 mod costs;
 pub mod failover;
 mod nearai;
@@ -17,6 +18,7 @@ mod rig_adapter;
 pub mod session;
 pub mod thinking;
 
+pub use auto_discovery::{DiscoveredModel, ModelDiscovery};
 pub use failover::FailoverProvider;
 pub use nearai::{ModelInfo, NearAiProvider};
 pub use nearai_chat::NearAiChatProvider;

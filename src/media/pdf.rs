@@ -165,22 +165,20 @@ fn extract_text_streams(data: &[u8]) -> Vec<String> {
 /// Extract text from a Tj or TJ PDF operator line.
 fn extract_tj_text(line: &str) -> Option<String> {
     // Simple Tj: (Hello World) Tj
-    if line.ends_with("Tj") {
-        if let Some(start) = line.find('(') {
-            if let Some(end) = line.rfind(')') {
-                if start < end {
-                    return Some(
-                        line[start + 1..end]
-                            .replace("\\n", "\n")
-                            .replace("\\r", "\r")
-                            .replace("\\t", "\t")
-                            .replace("\\(", "(")
-                            .replace("\\)", ")")
-                            .replace("\\\\", "\\"),
-                    );
-                }
-            }
-        }
+    if line.ends_with("Tj")
+        && let Some(start) = line.find('(')
+        && let Some(end) = line.rfind(')')
+        && start < end
+    {
+        return Some(
+            line[start + 1..end]
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\(", "(")
+                .replace("\\)", ")")
+                .replace("\\\\", "\\"),
+        );
     }
 
     // TJ array: [(Hello) -50 (World)] TJ

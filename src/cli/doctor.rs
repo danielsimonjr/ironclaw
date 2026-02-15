@@ -393,7 +393,7 @@ fn check_disk_space() -> Check {
         .join(".ironclaw");
 
     // Use fs4 to check available space
-    match fs4::available_space(&data_dir.parent().unwrap_or(&data_dir)) {
+    match fs4::available_space(data_dir.parent().unwrap_or(&data_dir)) {
         Ok(space) => {
             let gb = space as f64 / (1024.0 * 1024.0 * 1024.0);
             if gb < 1.0 {

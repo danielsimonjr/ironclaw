@@ -9,7 +9,9 @@
 
 pub mod bins_allowlist;
 pub mod elevated;
+pub mod group_policies;
 mod leak_detector;
+pub mod log_redaction;
 mod policy;
 mod sanitizer;
 mod validator;

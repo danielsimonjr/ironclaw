@@ -22,7 +22,7 @@ struct ThreadKey {
 
 /// Manages sessions, threads, and undo state for all users.
 pub struct SessionManager {
-    sessions: RwLock<HashMap<String, Arc<Mutex<Session>>>>,
+    pub(crate) sessions: RwLock<HashMap<String, Arc<Mutex<Session>>>>,
     thread_map: RwLock<HashMap<ThreadKey, Uuid>>,
     undo_managers: RwLock<HashMap<Uuid, Arc<Mutex<UndoManager>>>>,
 }

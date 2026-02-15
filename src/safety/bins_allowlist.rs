@@ -146,7 +146,7 @@ impl BinsAllowlist {
             // Check the command after sudo
             trimmed
                 .strip_prefix("sudo ")
-                .and_then(|rest| rest.trim().split_whitespace().next())
+                .and_then(|rest| rest.split_whitespace().next())
                 .unwrap_or(trimmed)
         } else if trimmed.starts_with("env ") {
             // Skip env and its options
@@ -194,18 +194,18 @@ pub fn validate_env_vars() -> Vec<String> {
     ];
 
     for var in &dangerous_vars {
-        if let Ok(value) = std::env::var(var) {
-            if !value.is_empty() {
-                warnings.push(format!(
-                    "Dangerous environment variable {} is set: {}",
-                    var,
-                    if value.len() > 50 {
-                        format!("{}...", &value[..47])
-                    } else {
-                        value
-                    }
-                ));
-            }
+        if let Ok(value) = std::env::var(var)
+            && !value.is_empty()
+        {
+            warnings.push(format!(
+                "Dangerous environment variable {} is set: {}",
+                var,
+                if value.len() > 50 {
+                    format!("{}...", &value[..47])
+                } else {
+                    value
+                }
+            ));
         }
     }
 

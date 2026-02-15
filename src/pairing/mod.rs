@@ -5,6 +5,10 @@
 //!
 //! OpenClaw reference: src/pairing/pairing-store.ts
 
+pub mod device;
 mod store;
 
+pub use device::{
+    DeviceInfo, DevicePairingError, DevicePairingManager, PairingChallenge, Platform,
+};
 pub use store::{PairingRequest, PairingStore, PairingStoreError};
