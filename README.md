@@ -69,7 +69,7 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 
 - Rust 1.85+
 - PostgreSQL 15+ with [pgvector](https://github.com/pgvector/pgvector) extension
-- NEAR AI account (authentication handled via setup wizard)
+- LLM provider account or API key (configured via setup wizard; supports NEAR AI, OpenAI, Anthropic, Ollama, and OpenAI-compatible endpoints)
 
 ## Download or Build
 
@@ -138,9 +138,9 @@ Run the setup wizard to configure IronClaw:
 ironclaw onboard
 ```
 
-The wizard handles database connection, NEAR AI authentication (via browser OAuth),
-and secrets encryption (using your system keychain). All settings are saved to
-`~/.ironclaw/settings.toml`.
+The wizard handles database connection, LLM provider selection (NEAR AI, OpenAI,
+Anthropic, Ollama, or OpenAI-compatible), and secrets encryption (using your system
+keychain). All settings are saved to `~/.ironclaw/settings.json`.
 
 ## Security
 

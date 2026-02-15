@@ -3,7 +3,7 @@
 //! The wizard guides users through:
 //! 1. Database connection
 //! 2. Security (secrets master key)
-//! 3. NEAR AI authentication
+//! 3. LLM provider selection
 //! 4. Model selection
 //! 5. Embeddings
 //! 6. Channel configuration
@@ -132,12 +132,12 @@ impl SetupWizard {
             print_step(2, total_steps, "Security");
             self.step_security().await?;
 
-            // Step 3: Authentication (unless skipped)
+            // Step 3: LLM Provider (unless skipped)
             if !self.config.skip_auth {
-                print_step(3, total_steps, "NEAR AI Authentication");
-                self.step_authentication().await?;
+                print_step(3, total_steps, "LLM Provider");
+                self.step_llm_provider().await?;
             } else {
-                print_info("Skipping authentication (using existing session)");
+                print_info("Skipping LLM provider setup (using existing configuration)");
             }
 
             // Step 4: Model selection
@@ -531,8 +531,85 @@ impl SetupWizard {
         Ok(())
     }
 
-    /// Step 3: NEAR AI authentication.
-    async fn step_authentication(&mut self) -> Result<(), SetupError> {
+    /// Step 3: LLM provider selection and authentication.
+    ///
+    /// Lets users choose their preferred LLM backend:
+    /// - NEAR AI (OAuth via browser)
+    /// - OpenAI (API key)
+    /// - Anthropic (API key)
+    /// - Ollama (local, no auth)
+    /// - OpenAI-compatible (custom endpoint)
+    async fn step_llm_provider(&mut self) -> Result<(), SetupError> {
+        // Check if a backend is already configured
+        let current_backend = std::env::var("LLM_BACKEND")
+            .ok()
+            .or_else(|| self.settings.llm_backend.clone());
+
+        if let Some(ref backend) = current_backend {
+            print_info(&format!("Current LLM provider: {}", backend));
+            if confirm("Keep current provider?", true).map_err(SetupError::Io)? {
+                // For NEAR AI, still validate the session
+                if backend == "nearai" || backend == "near_ai" || backend == "near" {
+                    self.authenticate_nearai().await?;
+                }
+                return Ok(());
+            }
+        }
+
+        println!();
+        print_info("Choose your LLM provider. IronClaw supports multiple backends.");
+        print_info("You can change this later with: ironclaw config set llm_backend <provider>");
+        println!();
+
+        let options = [
+            "NEAR AI (OAuth login via browser, multi-model access)",
+            "OpenAI (requires API key)",
+            "Anthropic (requires API key)",
+            "Ollama (local models, no account needed)",
+            "OpenAI-compatible endpoint (vLLM, LiteLLM, Together, etc.)",
+        ];
+
+        let choice = select_one("Select LLM provider:", &options).map_err(SetupError::Io)?;
+
+        match choice {
+            0 => {
+                // NEAR AI
+                self.settings.llm_backend = Some("nearai".to_string());
+                self.authenticate_nearai().await?;
+                print_success("NEAR AI configured");
+            }
+            1 => {
+                // OpenAI
+                self.settings.llm_backend = Some("openai".to_string());
+                self.setup_api_key_provider("OpenAI", "OPENAI_API_KEY")?;
+                print_success("OpenAI configured");
+            }
+            2 => {
+                // Anthropic
+                self.settings.llm_backend = Some("anthropic".to_string());
+                self.setup_api_key_provider("Anthropic", "ANTHROPIC_API_KEY")?;
+                print_success("Anthropic configured");
+            }
+            3 => {
+                // Ollama
+                self.settings.llm_backend = Some("ollama".to_string());
+                self.setup_ollama()?;
+                print_success("Ollama configured");
+            }
+            4 => {
+                // OpenAI-compatible
+                self.settings.llm_backend = Some("openai_compatible".to_string());
+                self.setup_openai_compatible()?;
+                print_success("OpenAI-compatible endpoint configured");
+            }
+            _ => unreachable!(),
+        }
+
+        Ok(())
+    }
+
+    /// Authenticate with NEAR AI (OAuth via browser).
+    async fn authenticate_nearai(&mut self) -> Result<(), SetupError> {
         // Check if we already have a session
         if let Some(ref session) = self.session_manager
             && session.has_token().await
@@ -567,6 +644,78 @@ impl SetupWizard {
         Ok(())
     }
 
+    /// Set up an API-key-based provider (OpenAI, Anthropic).
+    fn setup_api_key_provider(&self, provider_name: &str, env_var: &str) -> Result<(), SetupError> {
+        if std::env::var(env_var).is_ok() {
+            print_info(&format!("{} found in environment ({})", env_var, env_var));
+            print_success(&format!("{} API key detected", provider_name));
+            return Ok(());
+        }
+
+        println!();
+        print_info(&format!(
+            "Set the {} environment variable to authenticate with {}.",
+            env_var, provider_name
+        ));
+        print_info("Add it to your shell profile or .env file:");
+        println!();
+        println!("  export {}=<your-api-key>", env_var);
+        println!();
+        print_info("IronClaw will use this key on next startup.");
+        Ok(())
+    }
+
+    /// Set up Ollama (local inference).
+    fn setup_ollama(&mut self) -> Result<(), SetupError> {
+        println!();
+        print_info("Ollama runs models locally. No account or API key needed.");
+        print_info("Make sure Ollama is installed and running: https://ollama.com");
+        println!();
+
+        let base_url = optional_input("Ollama base URL", Some("default: http://localhost:11434"))
+            .map_err(SetupError::Io)?;
+
+        if let Some(ref url) = base_url {
+            self.settings.llm_base_url = Some(url.clone());
+            print_info(&format!("Ollama endpoint: {}", url));
+        } else {
+            print_info("Using default Ollama endpoint: http://localhost:11434");
+        }
+
+        Ok(())
+    }
+
+    /// Set up an OpenAI-compatible endpoint.
+    fn setup_openai_compatible(&mut self) -> Result<(), SetupError> {
+        println!();
+        print_info("Enter the base URL for your OpenAI-compatible API endpoint.");
+        print_info("Examples: https://api.together.ai/v1, http://localhost:8000/v1");
+        println!();
+
+        let url = input("Base URL").map_err(SetupError::Io)?;
+        if url.is_empty() {
+            return Err(SetupError::Config(
+                "Base URL is required for OpenAI-compatible endpoints".to_string(),
+            ));
+        }
+
+        self.settings.llm_base_url = Some(url.clone());
+
+        // Optional API key
+        if std::env::var("LLM_API_KEY").is_ok() {
+            print_info("LLM_API_KEY found in environment");
+        } else {
+            println!();
+            print_info("If your endpoint requires an API key, set LLM_API_KEY:");
+            println!();
+            println!("  export LLM_API_KEY=<your-api-key>");
+            println!();
+        }
+
+        print_info(&format!("Endpoint: {}", url));
+        Ok(())
+    }
+
     /// Step 4: Model selection.
     async fn step_model_selection(&mut self) -> Result<(), SetupError> {
         // Show current model if already configured
@@ -584,34 +733,77 @@ impl SetupWizard {
             }
         }
 
-        // Try to fetch available models
-        let models = if let Some(ref session) = self.session_manager {
-            self.fetch_available_models(session).await
-        } else {
-            vec![]
-        };
+        let backend = self.settings.llm_backend.as_deref().unwrap_or("nearai");
 
-        // Default models if we couldn't fetch
-        let default_models = [
-            (
-                "fireworks::accounts/fireworks/models/llama4-maverick-instruct-basic",
-                "Llama 4 Maverick (default, fast)",
-            ),
-            (
-                "anthropic::claude-sonnet-4-20250514",
-                "Claude Sonnet 4 (best quality)",
-            ),
-            ("openai::gpt-4o", "GPT-4o"),
-        ];
+        // Backend-specific default models
+        let default_models: Vec<(&str, &str)> = match backend {
+            "openai" | "open_ai" => vec![
+                ("gpt-4o", "GPT-4o (recommended)"),
+                ("gpt-4o-mini", "GPT-4o Mini (fast, cost-effective)"),
+                ("o3-mini", "o3-mini (reasoning)"),
+            ],
+            "anthropic" | "claude" => vec![
+                ("claude-sonnet-4-20250514", "Claude Sonnet 4 (recommended)"),
+                ("claude-opus-4-20250514", "Claude Opus 4 (most capable)"),
+                ("claude-haiku-3-5-20241022", "Claude Haiku 3.5 (fast)"),
+            ],
+            "ollama" => vec![
+                ("llama3", "Llama 3 (default)"),
+                ("mistral", "Mistral"),
+                ("codellama", "Code Llama"),
+                ("gemma2", "Gemma 2"),
+            ],
+            "openai_compatible" | "openai-compatible" => vec![("default", "Default model")],
+            _ => {
+                // NEAR AI: try to fetch available models
+                let models = if let Some(ref session) = self.session_manager {
+                    self.fetch_available_models(session).await
+                } else {
+                    vec![]
+                };
+
+                if !models.is_empty() {
+                    // Use fetched models directly
+                    println!("Available models:");
+                    println!();
+
+                    let options: Vec<&str> = models.iter().map(|m| m.as_str()).collect();
+                    let mut all_options = options.clone();
+                    all_options.push("Custom model ID");
+
+                    let choice =
+                        select_one("Select a model:", &all_options).map_err(SetupError::Io)?;
+
+                    let selected_model = if choice == all_options.len() - 1 {
+                        input("Enter model ID").map_err(SetupError::Io)?
+                    } else {
+                        models[choice].clone()
+                    };
+
+                    self.settings.selected_model = Some(selected_model.clone());
+                    print_success(&format!("Selected {}", selected_model));
+                    return Ok(());
+                }
+
+                // Fallback defaults for NEAR AI
+                vec![
+                    (
+                        "fireworks::accounts/fireworks/models/llama4-maverick-instruct-basic",
+                        "Llama 4 Maverick (default, fast)",
+                    ),
+                    (
+                        "anthropic::claude-sonnet-4-20250514",
+                        "Claude Sonnet 4 (best quality)",
+                    ),
+                    ("openai::gpt-4o", "GPT-4o"),
+                ]
+            }
+        };
 
         println!("Available models:");
         println!();
 
-        let options: Vec<&str> = if models.is_empty() {
-            default_models.iter().map(|(_, desc)| *desc).collect()
-        } else {
-            models.iter().map(|m| m.as_str()).collect()
-        };
+        let options: Vec<&str> = default_models.iter().map(|(_, desc)| *desc).collect();
 
         // Add custom option
         let mut all_options = options.clone();
@@ -622,10 +814,8 @@ impl SetupWizard {
         let selected_model = if choice == all_options.len() - 1 {
             // Custom model
             input("Enter model ID").map_err(SetupError::Io)?
-        } else if models.is_empty() {
-            default_models[choice].0.to_string()
         } else {
-            models[choice].clone()
+            default_models[choice].0.to_string()
         };
 
         self.settings.selected_model = Some(selected_model.clone());
@@ -689,32 +879,55 @@ impl SetupWizard {
             return Ok(());
         }
 
-        let options = [
-            "NEAR AI (uses same auth, no extra cost)",
-            "OpenAI (requires API key)",
-        ];
+        let backend = self.settings.llm_backend.as_deref().unwrap_or("nearai");
 
-        let choice = select_one("Select embeddings provider:", &options).map_err(SetupError::Io)?;
+        // If user already has OpenAI configured (either as backend or API key), default to that
+        let has_openai_key = std::env::var("OPENAI_API_KEY").is_ok();
+        let is_nearai = backend == "nearai" || backend == "near_ai" || backend == "near";
 
-        match choice {
-            0 => {
-                self.settings.embeddings.enabled = true;
-                self.settings.embeddings.provider = "nearai".to_string();
-                self.settings.embeddings.model = "text-embedding-3-small".to_string();
-                print_success("Embeddings enabled via NEAR AI");
-            }
-            1 => {
-                // Check if API key is set
-                if std::env::var("OPENAI_API_KEY").is_err() {
-                    print_info("OPENAI_API_KEY not set in environment.");
-                    print_info("Add it to your .env file or environment to enable embeddings.");
+        if is_nearai && has_openai_key {
+            // Both available - let user choose
+            let options = [
+                "NEAR AI (uses same auth, no extra cost)",
+                "OpenAI (uses OPENAI_API_KEY)",
+            ];
+
+            let choice =
+                select_one("Select embeddings provider:", &options).map_err(SetupError::Io)?;
+
+            match choice {
+                0 => {
+                    self.settings.embeddings.enabled = true;
+                    self.settings.embeddings.provider = "nearai".to_string();
+                    self.settings.embeddings.model = "text-embedding-3-small".to_string();
+                    print_success("Embeddings enabled via NEAR AI");
                 }
-                self.settings.embeddings.enabled = true;
-                self.settings.embeddings.provider = "openai".to_string();
-                self.settings.embeddings.model = "text-embedding-3-small".to_string();
-                print_success("Embeddings configured for OpenAI");
+                1 => {
+                    self.settings.embeddings.enabled = true;
+                    self.settings.embeddings.provider = "openai".to_string();
+                    self.settings.embeddings.model = "text-embedding-3-small".to_string();
+                    print_success("Embeddings enabled via OpenAI");
+                }
+                _ => unreachable!(),
             }
-            _ => unreachable!(),
+        } else if is_nearai {
+            // NEAR AI only
+            self.settings.embeddings.enabled = true;
+            self.settings.embeddings.provider = "nearai".to_string();
+            self.settings.embeddings.model = "text-embedding-3-small".to_string();
+            print_success("Embeddings enabled via NEAR AI");
+        } else if has_openai_key || backend == "openai" || backend == "open_ai" {
+            // OpenAI key available or OpenAI backend
+            self.settings.embeddings.enabled = true;
+            self.settings.embeddings.provider = "openai".to_string();
+            self.settings.embeddings.model = "text-embedding-3-small".to_string();
+            print_success("Embeddings enabled via OpenAI");
+        } else {
+            // No embedding-capable provider readily available
+            print_info("Embeddings require either NEAR AI auth or an OpenAI API key.");
+            print_info("Set OPENAI_API_KEY in your environment to enable embeddings later.");
+            self.settings.embeddings.enabled = false;
+            print_info("Embeddings disabled for now. Workspace will use keyword search only.");
         }
 
         Ok(())
@@ -1059,6 +1272,18 @@ impl SetupWizard {
             KeySource::Keychain => println!("  Security: OS keychain"),
             KeySource::Env => println!("  Security: environment variable"),
             KeySource::None => println!("  Security: disabled"),
+        }
+
+        if let Some(ref backend) = self.settings.llm_backend {
+            let display_name = match backend.as_str() {
+                "nearai" | "near_ai" | "near" => "NEAR AI",
+                "openai" | "open_ai" => "OpenAI",
+                "anthropic" | "claude" => "Anthropic",
+                "ollama" => "Ollama",
+                "openai_compatible" | "openai-compatible" => "OpenAI-compatible",
+                other => other,
+            };
+            println!("  LLM Provider: {}", display_name);
         }
 
         if let Some(ref model) = self.settings.selected_model {
