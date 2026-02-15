@@ -5,12 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Test Commands
 
 ```bash
-cargo fmt                                                    # Format code
+cargo fmt                                                       # Format code
 cargo clippy --all --benches --tests --examples --all-features  # Lint (fix warnings before committing)
-cargo test                                                   # Run all tests
-cargo test test_name                                         # Run a specific test
-cargo test safety::sanitizer::tests                          # Run a module's tests
-RUST_LOG=ironclaw=debug cargo run                            # Run with debug logging
+cargo test                                                      # Run all tests
+cargo test test_name                                            # Run a specific test
+cargo test safety::sanitizer::tests                             # Run a module's tests
+RUST_LOG=ironclaw=debug cargo run                               # Run with debug logging
 ```
 
 Feature-gated builds:
@@ -48,12 +48,44 @@ Channels (REPL, HTTP, WASM, Web Gateway)
 
 | Trait | Location | Purpose |
 |-------|----------|---------|
-| `Database` | `src/db/mod.rs` | ~60 async methods for all persistence. **Both backends must be updated for new features.** |
+| `Database` | `src/db/mod.rs` | ~75 async methods for all persistence. **Both backends must be updated for new features.** |
 | `Channel` | `src/channels/channel.rs` | Input sources (REPL, HTTP, WASM, web gateway) |
 | `Tool` | `src/tools/tool.rs` | Executable capabilities (built-in, WASM, MCP) |
 | `LlmProvider` | `src/llm/provider.rs` | LLM backends (currently NEAR AI only) |
 | `EmbeddingProvider` | `src/workspace/embeddings.rs` | Vector embedding backends |
 | `SuccessEvaluator` | `src/evaluation/success.rs` | Job outcome evaluation |
+
+### Source Modules
+
+The codebase is organized into 25 public modules (`src/lib.rs`):
+
+| Module | Purpose |
+|--------|---------|
+| `agent` | Core agent loop, routing, scheduling, session management, worker dispatch, self-repair, heartbeat, routine engine, compaction, undo |
+| `bootstrap` | Initial setup, bootstrap config persistence (`~/.ironclaw/bootstrap.json`) |
+| `channels` | Input channel abstraction (REPL, HTTP, WASM, web gateway), channel manager |
+| `cli` | CLI subcommands (tool, mcp, memory, config, pairing, status) |
+| `config` | Configuration management (env > DB > defaults) |
+| `context` | Job context, mutable state, identity memory injection (IDENTITY.md, SOUL.md, etc.) |
+| `db` | Database trait + dual backend (PostgreSQL, libSQL) |
+| `error` | Typed error hierarchy via `thiserror` |
+| `estimation` | Cost/time prediction with ML-based learner |
+| `evaluation` | Job outcome success evaluation and metrics |
+| `extensions` | Dynamic tool/MCP server discovery, install, auth, lifecycle management |
+| `history` | Job/session/conversation history persistence and analytics |
+| `llm` | LLM provider abstraction, NEAR AI integration, chat sessions, reasoning, cost tracking |
+| `orchestrator` | Container job orchestration, internal API (`:50051`), per-job bearer token auth |
+| `pairing` | DM approval flow for unknown senders |
+| `safety` | Safety layer (sanitizer → validator → policy), leak detection |
+| `sandbox` | Docker container management, network proxy with HTTP allowlist |
+| `secrets` | Encrypted credential vault, system keychain integration (macOS/Linux), AES-GCM crypto |
+| `settings` | Runtime settings storage (separate from config) |
+| `setup` | Interactive onboarding wizard |
+| `tools` | Tool registry, built-in/WASM/MCP tool execution |
+| `tracing_fmt` | Custom tracing/logging format |
+| `util` | Shared utilities |
+| `worker` | Sandboxed worker runtime, Claude Code bridge (`claude` CLI delegation) |
+| `workspace` | Filesystem-like persistent memory, hybrid search (FTS + vector), document chunking |
 
 ### Startup Sequence (main.rs)
 
@@ -75,6 +107,24 @@ PostgreSQL (default, `postgres` feature) and libSQL/Turso (`libsql` feature). **
 
 Key type mappings for libSQL: `UUID→TEXT`, `TIMESTAMPTZ→TEXT(ISO-8601)`, `JSONB→TEXT`, `VECTOR(1536)→F32_BLOB(1536)`, `tsvector→FTS5`.
 
+Database trait methods by category (~75 total):
+
+| Category | Count | Examples |
+|----------|-------|---------|
+| Conversations | 12 | `create_conversation`, `add_conversation_message`, `list_conversations_with_preview` |
+| Jobs | 5 | `save_job`, `get_job`, `update_job_status`, `mark_job_stuck` |
+| Sandbox Jobs | 11 | `save_sandbox_job`, `list_sandbox_jobs`, `update_sandbox_job_status`, `update_sandbox_job_mode` |
+| Routines | 10 | `create_routine`, `list_routines`, `list_due_cron_routines`, `update_routine_runtime` |
+| Routine Runs | 4 | `create_routine_run`, `complete_routine_run`, `list_routine_runs` |
+| Settings | 8 | `get_setting`, `set_setting`, `list_settings`, `get_all_settings` |
+| Workspace Docs | 8 | `get_document_by_path`, `update_document`, `list_directory` |
+| Workspace Chunks | 4 | `insert_chunk`, `update_chunk_embedding`, `get_chunks_without_embeddings` |
+| Workspace Search | 1 | `hybrid_search` |
+| Tool Failures | 4 | `record_tool_failure`, `get_broken_tools`, `mark_tool_repaired` |
+| Actions/Events | 4 | `save_action`, `get_job_actions`, `save_job_event`, `list_job_events` |
+| LLM/Estimation | 3 | `record_llm_call`, `save_estimation_snapshot`, `update_estimation_actuals` |
+| Migrations | 1 | `run_migrations` |
+
 ### Tool System
 
 Three tool types share the same `Tool` trait interface:
@@ -87,6 +137,26 @@ Three tool types share the same `Tool` trait interface:
 
 Tools with `requires_approval() = true` (shell, http, file write/patch, builder) gate execution on user approval.
 
+#### Built-in Tools (registered in phases)
+
+| Phase | Tools | Domain |
+|-------|-------|--------|
+| `register_builtin_tools()` | `echo`, `time`, `json`, `http` | Orchestrator — always safe |
+| `register_dev_tools()` | `shell`, `read_file`, `write_file`, `list_dir`, `apply_patch` | Container — file/shell ops |
+| `register_memory_tools(workspace)` | `memory_search`, `memory_write`, `memory_read`, `memory_tree` | Memory operations |
+| `register_job_tools(...)` | `create_job`, `list_jobs`, `job_status`, `cancel_job` | Job management |
+| `register_extension_tools(manager)` | `tool_search`, `tool_install`, `tool_auth`, `tool_activate`, `tool_list`, `tool_remove` | Extension lifecycle |
+| `register_routine_tools(store, engine)` | `routine_create`, `routine_list`, `routine_update`, `routine_delete`, `routine_history` | Scheduled routines |
+| `register_builder_tool(llm, safety, ...)` | `build_software` | LLM-driven software builder |
+
+#### WASM Tools (`tools-src/`)
+
+Nine pre-built WASM tools: `gmail`, `google-calendar`, `google-docs`, `google-drive`, `google-sheets`, `google-slides`, `okta`, `slack`, `telegram`. Each is a standalone Rust crate with a `capabilities.json` manifest.
+
+#### WASM Channels (`channels-src/`)
+
+Three pluggable WASM channels: `slack`, `telegram`, `whatsapp`. Each implements the Channel WIT interface (`wit/channel.wit`) and is loaded at runtime.
+
 ### Safety Layer
 
 All external tool output passes through `SafetyLayer` (sanitizer → validator → policy) before reaching the LLM. Tool outputs are XML-wrapped with sanitization markers. `LeakDetector` scans for secret exfiltration.
@@ -94,6 +164,78 @@ All external tool output passes through `SafetyLayer` (sanitizer → validator �
 ### Workspace & Memory
 
 Filesystem-like persistent memory in the database (`memory_documents` + `memory_chunks` tables). Identity files (IDENTITY.md, SOUL.md, AGENTS.md, USER.md) are injected into LLM system prompts. Hybrid search uses FTS + vector via Reciprocal Rank Fusion (PostgreSQL) or FTS5 only (libSQL).
+
+### Background Systems
+
+Several background tasks run alongside the main agent loop:
+
+- **Self-repair**: Periodic detection and recovery of stuck jobs and broken tools (`src/agent/self_repair.rs`)
+- **Session pruning**: Cleanup of expired/idle sessions
+- **Heartbeat**: Proactive periodic execution driven by `HEARTBEAT.md` checklist (`src/agent/heartbeat.rs`)
+- **Routine engine**: Cron-based and event-driven scheduled job execution (`src/agent/routine_engine.rs`)
+- **Context monitor**: Token/time/cost tracking for active jobs (`src/agent/context_monitor.rs`)
+
+## Repository Structure
+
+```
+ironclaw/
+├── src/                    # Main Rust source (25 modules)
+├── tools-src/              # WASM tool crates (9 tools)
+│   ├── gmail/
+│   ├── google-calendar/
+│   ├── google-docs/
+│   ├── google-drive/
+│   ├── google-sheets/
+│   ├── google-slides/
+│   ├── okta/
+│   ├── slack/
+│   └── telegram/
+├── channels-src/           # WASM channel crates (3 channels)
+│   ├── slack/
+│   ├── telegram/
+│   └── whatsapp/
+├── wit/                    # WASM Interface Definitions
+│   ├── tool.wit            # Tool component interface
+│   └── channel.wit         # Channel component interface
+├── migrations/             # PostgreSQL schema (V1–V8)
+├── docs/                   # Additional documentation
+│   ├── BUILDING_CHANNELS.md
+│   └── TELEGRAM_SETUP.md
+├── deploy/                 # Deployment configs (systemd, setup scripts)
+├── docker/                 # Container images (sandbox.Dockerfile)
+├── examples/               # Example code (test_heartbeat.rs)
+├── .claude/                # Claude Code custom commands
+│   ├── add-tool.md
+│   ├── add-sse-event.md
+│   ├── trace.md
+│   └── ship.md
+├── .github/workflows/      # CI (test, code_style, release, release-plz)
+├── build.rs                # Build script (compiles Telegram channel WASM)
+├── Cargo.toml              # Rust 2024 edition, MSRV 1.92
+├── Dockerfile              # Main service container
+├── Dockerfile.worker       # Worker process container
+└── docker-compose.yml      # Local dev setup
+```
+
+## Error Handling Hierarchy
+
+All errors use `thiserror` with a top-level `Error` enum in `src/error.rs` that wraps domain-specific error types:
+
+| Error Type | Domain |
+|------------|--------|
+| `ConfigError` | Missing env vars, invalid values, parse failures |
+| `DatabaseError` | Pool, query, not-found, constraint, migration errors (feature-gated for postgres/libsql) |
+| `ChannelError` | Startup, disconnect, send, auth, rate-limit failures |
+| `LlmError` | Request, rate-limit, context-length, auth, session errors |
+| `ToolError` | Not-found, execution, timeout, sandbox, auth-required errors |
+| `SafetyError` | Injection detection, output size, blocked content, policy violations |
+| `JobError` | Not-found, invalid transition, stuck, max-jobs-exceeded |
+| `EstimationError` | Insufficient data, calculation failures |
+| `EvaluationError` | Failed evaluation, missing data |
+| `RepairError` | Repair failure, max attempts exceeded, diagnosis failure |
+| `WorkspaceError` | Document not-found, search, embedding, chunking errors |
+| `OrchestratorError` | Container creation, auth, Docker, timeout errors |
+| `WorkerError` | Connection, LLM proxy, secret resolution, missing token |
 
 ## Code Conventions
 
@@ -103,6 +245,7 @@ Filesystem-like persistent memory in the database (`memory_documents` + `memory_
 - **Types**: Prefer strong types (enums, newtypes) over strings.
 - **Testing**: Tests live in `mod tests {}` blocks at the bottom of each file. Async tests use `#[tokio::test]`. No mocks — prefer real implementations or stubs.
 - **Architecture**: Prefer generic/extensible designs over hardcoded integrations. Ask clarifying questions about abstraction level before implementing.
+- **Rust edition**: 2024 with MSRV 1.92.
 
 ## Adding New Components
 
@@ -110,7 +253,7 @@ Filesystem-like persistent memory in the database (`memory_documents` + `memory_
 
 1. Create `src/tools/builtin/my_tool.rs` implementing the `Tool` trait
 2. Add `mod my_tool;` and `pub use` in `src/tools/builtin/mod.rs`
-3. Register in `ToolRegistry::register_builtin_tools()` in `registry.rs`
+3. Register in the appropriate phase in `ToolRegistry` (`registry.rs`) — choose the phase matching the tool's domain (orchestrator, container, memory, job, extension, routine, or builder)
 
 ### New WASM Tool
 
@@ -125,19 +268,49 @@ Filesystem-like persistent memory in the database (`memory_documents` + `memory_
 2. Add config fields in `src/config.rs`
 3. Wire up in `main.rs` channel setup section
 
+### New WASM Channel
+
+1. Create crate in `channels-src/<name>/`
+2. Implement WIT interface (`wit/channel.wit`)
+3. Create `<name>.capabilities.json` for permissions
+4. Build with `cargo build --target wasm32-wasip2 --release`
+
 ### New Database Method
 
 1. Add method to `Database` trait in `src/db/mod.rs`
 2. Implement in `src/db/postgres.rs` (delegate to Store/Repository)
 3. Implement in `src/db/libsql_backend.rs` (native SQL)
+4. Add migration if schema changes needed: `migrations/V<N>__description.sql` (PostgreSQL) and update `src/db/libsql_migrations.rs` (libSQL)
+
+### New SSE Event (Web Gateway)
+
+1. Define event type in `src/channels/web/types.rs`
+2. Add SSE serialization in `src/channels/web/sse.rs`
+3. Emit from the appropriate agent/worker code
+4. Handle in the web frontend (`src/channels/web/static/app.js`)
 
 ## Configuration
 
 Config loads with priority: environment variables > database settings > defaults. Bootstrap config persists to `~/.ironclaw/bootstrap.json`. See `.env.example` for all environment variables. Key ones:
 
-- `DATABASE_BACKEND` — `postgres` (default) or `libsql`
-- `NEARAI_SESSION_TOKEN` / `NEARAI_MODEL` / `NEARAI_BASE_URL` — LLM provider (required)
-- `GATEWAY_ENABLED` / `GATEWAY_PORT` / `GATEWAY_AUTH_TOKEN` — web UI
+- `DATABASE_URL` / `DATABASE_BACKEND` — Connection string and backend (`postgres` default, or `libsql`)
+- `DATABASE_POOL_SIZE` — Connection pool size (default 10)
+- `NEARAI_SESSION_TOKEN` / `NEARAI_MODEL` / `NEARAI_BASE_URL` / `NEARAI_AUTH_URL` — LLM provider (required)
+- `GATEWAY_ENABLED` / `GATEWAY_PORT` / `GATEWAY_AUTH_TOKEN` — Web UI gateway
 - `SANDBOX_ENABLED` — Docker container isolation
 - `CLAUDE_CODE_ENABLED` — Claude CLI delegation mode
-- `RUST_LOG=ironclaw=debug` or `ironclaw::agent=debug` — targeted logging
+- `HEARTBEAT_ENABLED` / `HEARTBEAT_INTERVAL_SECS` / `HEARTBEAT_NOTIFY_CHANNEL` — Proactive periodic execution
+- `SELF_REPAIR_CHECK_INTERVAL_SECS` / `SELF_REPAIR_MAX_ATTEMPTS` — Self-repair loop
+- `AGENT_MAX_PARALLEL_JOBS` / `AGENT_JOB_TIMEOUT_SECS` / `AGENT_STUCK_THRESHOLD_SECS` — Job execution limits
+- `AGENT_USE_PLANNING` — Enable planning phase before tool execution (default true)
+- `SAFETY_MAX_OUTPUT_LENGTH` / `SAFETY_INJECTION_CHECK_ENABLED` — Safety layer settings
+- `RUST_LOG=ironclaw=debug` or `ironclaw::agent=debug` — Targeted logging
+
+## CI / Release
+
+- **test.yml** — Runs `cargo test` on PR and push
+- **code_style.yml** — Runs `cargo fmt --check` and `cargo clippy` on PR and push
+- **release.yml** — Builds release binaries for all platforms (macOS, Linux, Windows) via `cargo-dist`
+- **release-plz.yml** — Automated version bumping and changelog generation
+
+Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`.
