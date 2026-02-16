@@ -120,7 +120,7 @@ Download the [Windows Installer (.msi)](https://github.com/nearai/ironclaw/relea
   <summary>Install via PowerShell script (Windows)</summary>
 
 ```sh
-irm https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
+irm https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
 ```
 
 The PowerShell installer supports additional options when saved and run as a script:
