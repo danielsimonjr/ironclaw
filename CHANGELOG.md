@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Windows installer and PowerShell install script** ([#13](https://github.com/nearai/ironclaw/pull/13)):
+  - PowerShell installer (`deploy/windows/ironclaw-installer.ps1`) with one-liner install: `irm .../ironclaw-installer.ps1 | iex`
+  - Architecture detection (x86_64, ARM64 via Windows emulation)
+  - Latest version auto-detection via GitHub API with fallback
+  - Dual install modes: archive-based (tar.gz) or MSI (`-UseMsi` flag)
+  - Configurable install directory (`-InstallDir`), version pinning (`-Version`), PATH opt-out (`-NoPathUpdate`)
+  - CARGO_HOME/bin detection with LocalAppData fallback for install location
+  - Upgrade handling for existing installations with binary rename
+  - WiX v3 MSI source (`deploy/windows/ironclaw.wxs`) for `cargo-wix`/`cargo-dist` builds with per-user install scope and PATH integration
+  - GitHub Actions workflow (`windows-installer.yml`) to upload PowerShell script to each release
+
 - **RLM-based large document processing** ([#11](https://github.com/nearai/ironclaw/pull/11)):
   - Implements Recursive Language Model (RLM) techniques from Zhang, Kraska & Khattab (arXiv:2512.24601)
   - `DocumentContext`: external environment holding full document text, pre-computed overlapping chunks, and metadata
