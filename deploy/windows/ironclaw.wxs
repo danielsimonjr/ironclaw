@@ -1,0 +1,115 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  ironclaw.wxs — WiX v3 source for the IronClaw MSI installer.
+
+  This file is used by cargo-wix (invoked by cargo-dist) to build a Windows
+  Installer package (.msi). The GUIDs here must match [package.metadata.wix]
+  in Cargo.toml.
+
+  Build manually (if needed):
+    cargo install cargo-wix
+    cargo wix --nocapture
+
+  Reference: https://wixtoolset.org/documentation/manual/v3/
+-->
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+
+    <!-- ─── Product ───────────────────────────────────────────────────── -->
+    <Product
+        Id='*'
+        Name='IronClaw'
+        UpgradeCode='D0156E61-BA37-451E-8AB9-1A2ECCCFA48F'
+        Manufacturer='IronClaw Contributors'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package
+            Id='*'
+            Keywords='Installer'
+            Description='IronClaw - Secure Personal AI Assistant'
+            Manufacturer='IronClaw Contributors'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perUser'
+            SummaryCodepage='1252' />
+
+        <!-- Allow upgrades, prevent downgrades -->
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.' />
+
+        <!-- Embed cabinet in MSI for single-file distribution -->
+        <MediaTemplate EmbedCab='yes' />
+
+        <!-- ─── Features ─────────────────────────────────────────────── -->
+        <Feature Id='Binaries' Title='IronClaw' Level='1'>
+            <ComponentRef Id='Path' />
+            <ComponentRef Id='binary0' />
+            <Feature Id='Environment' Title='PATH Environment Variable' Description='Add ironclaw to the system PATH.' Level='1'>
+                <ComponentRef Id='Environment' />
+            </Feature>
+        </Feature>
+
+        <!-- ─── Directory Layout ─────────────────────────────────────── -->
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <!-- Per-user install to LocalAppData\Programs\IronClaw -->
+            <Directory Id='LocalAppDataFolder' Name='LocalAppData'>
+                <Directory Id='ProgramsFolder' Name='Programs'>
+                    <Directory Id='APPLICATIONFOLDER' Name='IronClaw'>
+                        <Component Id='binary0' Guid='*'>
+                            <File
+                                Id='exe0'
+                                Name='ironclaw.exe'
+                                DiskId='1'
+                                Source='$(var.CargoTargetBinDir)\ironclaw.exe'
+                                KeyPath='yes' />
+                        </Component>
+                        <Component Id='Path' Guid='F90B6EA6-87F7-499B-BB19-CF55DE1EB339'>
+                            <CreateFolder />
+                            <RegistryValue
+                                Root='HKCU'
+                                Key='Software\IronClaw'
+                                Name='InstallPath'
+                                Type='string'
+                                Value='[APPLICATIONFOLDER]'
+                                KeyPath='yes' />
+                        </Component>
+                        <Component Id='Environment' Guid='B9A6C247-3D4E-4F8A-9C1B-2E5F7A8D0C3E'>
+                            <Environment
+                                Id='PATH'
+                                Name='PATH'
+                                Value='[APPLICATIONFOLDER]'
+                                Permanent='no'
+                                Part='last'
+                                Action='set'
+                                System='no' />
+                            <RegistryValue
+                                Root='HKCU'
+                                Key='Software\IronClaw'
+                                Name='PathEnvSet'
+                                Type='integer'
+                                Value='1'
+                                KeyPath='yes' />
+                        </Component>
+                    </Directory>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <!-- ─── UI ───────────────────────────────────────────────────── -->
+        <!-- Minimal UI: progress bar and completion dialog only -->
+        <UIRef Id='WixUI_Minimal' />
+
+        <!-- Custom banner and background (optional — remove if not shipping images) -->
+        <!--
+        <WixVariable Id='WixUIBannerBmp' Value='deploy\windows\banner.bmp' />
+        <WixVariable Id='WixUIDialogBmp' Value='deploy\windows\dialog.bmp' />
+        -->
+
+        <!-- Skip license dialog (license=false in Cargo.toml metadata) -->
+        <WixVariable Id='WixUILicenseRtf' Value='' />
+
+    </Product>
+</Wix>

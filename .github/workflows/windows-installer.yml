@@ -1,0 +1,29 @@
+# Upload the PowerShell installer script to GitHub Releases.
+#
+# This runs after the main Release workflow creates the release, and attaches
+# ironclaw-installer.ps1 as an additional asset so users can install via:
+#
+#   irm https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
+
+name: Windows Installer
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  upload-installer:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload PowerShell installer to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            deploy/windows/ironclaw-installer.ps1 \
+            --clobber
