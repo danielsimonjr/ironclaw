@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **RLM-based large document processing** ([#11](https://github.com/nearai/ironclaw/pull/11)):
+  - Implements Recursive Language Model (RLM) techniques from Zhang, Kraska & Khattab (arXiv:2512.24601)
+  - `DocumentContext`: external environment holding full document text, pre-computed overlapping chunks, and metadata
+  - `RlmOperation`: typed operations (read_slice, read_lines, read_chunk, search, sub_query, batch_sub_query, final_answer) the LLM can request
+  - `LargeDocumentProcessor`: iterative processing loop with recursive sub-query support and concurrent batch execution
+  - `RlmConfig`: configurable max iterations, recursion depth, chunk sizes, context limits, and LLM parameters
+  - `ProcessingStats`: detailed metrics tracking (iterations, sub-queries, tokens, chunks accessed, elapsed time)
+  - New `MediaError` variants for recursive processing depth/iteration limits (`src/media/large_doc.rs`)
+
 - **P3 feature parity** — 12 new modules for OpenClaw alignment ([#9](https://github.com/nearai/ironclaw/pull/9)):
   - Google Gemini LLM provider with REST API and function calling (`src/llm/gemini.rs`)
   - AWS Bedrock LLM provider with SigV4 auth and Converse API (`src/llm/bedrock.rs`)
