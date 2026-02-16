@@ -10,11 +10,13 @@
 //! - Sticker-to-image conversion (WebP, TGS, animated WebP)
 //! - Video metadata extraction (MP4, WebM, AVI, MOV, MKV)
 //! - Text-to-speech synthesis (via OpenAI TTS API)
+//! - Large document processing via Recursive Language Model (RLM) techniques
 
 mod cache;
 mod detection;
 mod edge_tts;
 mod image;
+pub mod large_doc;
 mod pdf;
 mod sticker;
 mod transcription;
@@ -26,6 +28,10 @@ pub use cache::MediaCache;
 pub use detection::{MediaInfo, MediaType, detect_mime_type, validate_media_url};
 pub use edge_tts::{EdgeTtsProvider, EdgeVoice};
 pub use image::{ImageFormat, ImageProcessor, ProcessedImage};
+pub use large_doc::{
+    DocumentContext, DocumentMetadata, LargeDocumentProcessor, OperationResult, ProcessingResult,
+    ProcessingStats, RlmConfig, RlmOperation, SubQuerySpec, process_large_document,
+};
 pub use pdf::{PdfExtractor, PdfPage};
 pub use sticker::{ConvertedSticker, StickerConverter, StickerFormat};
 pub use transcription::{TranscriptionProvider, TranscriptionResult};

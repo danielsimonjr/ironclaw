@@ -410,6 +410,18 @@ pub enum MediaError {
 
     #[error("Vision processing failed: {reason}")]
     VisionFailed { reason: String },
+
+    #[error("Recursive processing failed: {reason}")]
+    RecursiveProcessingFailed { reason: String },
+
+    #[error("Recursive processing exceeded max depth ({max_depth})")]
+    MaxDepthExceeded { max_depth: u32 },
+
+    #[error("Recursive processing exceeded max iterations ({max_iterations})")]
+    MaxIterationsExceeded { max_iterations: u32 },
+
+    #[error("Chunk index {index} out of range (total: {total})")]
+    ChunkOutOfRange { index: usize, total: usize },
 }
 
 /// Skills system errors.
