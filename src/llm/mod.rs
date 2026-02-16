@@ -6,10 +6,14 @@
 //! - **Anthropic**: Direct API access with your own key
 //! - **Ollama**: Local model inference
 //! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI API
+//! - **Google Gemini**: Direct API access with your own key
+//! - **AWS Bedrock**: AWS-managed models via SigV4 auth
 
 pub mod auto_discovery;
+pub mod bedrock;
 mod costs;
 pub mod failover;
+pub mod gemini;
 mod nearai;
 mod nearai_chat;
 mod provider;
@@ -19,7 +23,9 @@ pub mod session;
 pub mod thinking;
 
 pub use auto_discovery::{DiscoveredModel, ModelDiscovery};
+pub use bedrock::{BedrockConfig, BedrockProvider};
 pub use failover::FailoverProvider;
+pub use gemini::{GeminiConfig, GeminiProvider};
 pub use nearai::{ModelInfo, NearAiProvider};
 pub use nearai_chat::NearAiChatProvider;
 pub use provider::{
@@ -57,6 +63,8 @@ pub fn create_llm_provider(
         LlmBackend::Anthropic => create_anthropic_provider(config),
         LlmBackend::Ollama => create_ollama_provider(config),
         LlmBackend::OpenAiCompatible => create_openai_compatible_provider(config),
+        LlmBackend::Gemini => create_gemini_provider(config),
+        LlmBackend::Bedrock => create_bedrock_provider(config),
     }
 }
 
@@ -178,4 +186,42 @@ fn create_openai_compatible_provider(config: &LlmConfig) -> Result<Arc<dyn LlmPr
         compat.model
     );
     Ok(Arc::new(RigAdapter::new(model, &compat.model)))
+}
+
+fn create_gemini_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvider>, LlmError> {
+    let gemini_cfg = config.gemini.as_ref().ok_or_else(|| LlmError::AuthFailed {
+        provider: "gemini".to_string(),
+    })?;
+
+    let provider_config = GeminiConfig::new(gemini_cfg.api_key.expose_secret(), &gemini_cfg.model);
+
+    tracing::info!("Using Google Gemini (model: {})", gemini_cfg.model);
+    Ok(Arc::new(GeminiProvider::new(provider_config)))
+}
+
+fn create_bedrock_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvider>, LlmError> {
+    let bedrock_cfg = config
+        .bedrock
+        .as_ref()
+        .ok_or_else(|| LlmError::AuthFailed {
+            provider: "bedrock".to_string(),
+        })?;
+
+    let mut provider_config = BedrockConfig::new(
+        &bedrock_cfg.region,
+        bedrock_cfg.access_key_id.expose_secret(),
+        bedrock_cfg.secret_access_key.expose_secret(),
+        &bedrock_cfg.model_id,
+    );
+
+    if let Some(ref token) = bedrock_cfg.session_token {
+        provider_config = provider_config.with_session_token(token.expose_secret());
+    }
+
+    tracing::info!(
+        "Using AWS Bedrock (region: {}, model: {})",
+        bedrock_cfg.region,
+        bedrock_cfg.model_id
+    );
+    Ok(Arc::new(BedrockProvider::new(provider_config)))
 }

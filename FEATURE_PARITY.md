@@ -34,13 +34,13 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Channel connection lifecycle | ✅ | ✅ | ChannelManager + WebSocket tracker |
 | Session management/routing | ✅ | ✅ | SessionManager exists |
 | Configuration hot-reload | ✅ | ✅ | `ConfigWatcher` + `config_reload::spawn_config_reload_task()` wired into agent loop (`src/agent/config_reload.rs`) |
-| Network modes (loopback/LAN/remote) | ✅ | 🚧 | HTTP only |
+| Network modes (loopback/LAN/remote) | ✅ | ✅ | `NetworkMode` enum with Loopback/Lan/Remote, host validation, TLS/auth requirements (`src/channels/web/network_mode.rs`) |
 | OpenAI-compatible HTTP API | ✅ | ✅ | /v1/chat/completions |
 | Canvas hosting | ✅ | ✅ | `CanvasManager` with A2UI (agent-driven UI) (`src/channels/web/canvas.rs`) |
 | Gateway lock (PID-based) | ✅ | ✅ | `PidLock` in `src/channels/web/pid_lock.rs` |
 | launchd/systemd integration | ✅ | ✅ | Service file generation in `src/cli/service.rs` (systemd + launchd) |
-| Bonjour/mDNS discovery | ✅ | 🔮 | Planned |
-| Tailscale integration | ✅ | 🔮 | Planned |
+| Bonjour/mDNS discovery | ✅ | ✅ | `MdnsAdvertiser` with SRV+TXT records, background responder (`src/channels/web/mdns.rs`) |
+| Tailscale integration | ✅ | ✅ | `TailscaleIntegration` with local API, peer identity via WhoIs (`src/channels/web/tailscale.rs`) |
 | Presence system | ✅ | ✅ | `PresenceTracker` with TTL expiry, capacity eviction (`src/channels/web/presence.rs`) |
 | Health check endpoints | ✅ | ✅ | /api/health + /api/gateway/status |
 | `doctor` diagnostics | ✅ | ✅ | `ironclaw doctor` CLI command (`src/cli/doctor.rs`) |
@@ -76,7 +76,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Feature | OpenClaw | IronClaw | Notes |
 |---------|----------|----------|-------|
 | DM pairing codes | ✅ | ✅ | `ironclaw pairing list/approve`, host APIs |
-| Allowlist/blocklist | ✅ | 🚧 | allow_from + pairing store |
+| Allowlist/blocklist | ✅ | ✅ | `AccessControlList` with AllowAll/AllowList/BlockList modes, glob matching (`src/safety/allowlist.rs`) |
 | Self-message bypass | ✅ | ✅ | `SelfMessageFilter` in `src/channels/self_message.rs` |
 | Mention-based activation | ✅ | ✅ | bot_username + respond_to_all_group_messages |
 | Per-group tool policies | ✅ | ✅ | `GroupPolicyManager` in `src/safety/group_policies.rs` |
@@ -136,8 +136,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Custom system prompts | ✅ | ✅ | Template variables |
 | Skills (modular capabilities) | ✅ | ✅ | `SkillRegistry` with tool bundles, tags, config (`src/skills/registry.rs`) |
 | Thinking modes (low/med/high) | ✅ | ✅ | `ThinkingMode` with temperature, max_tokens, planning flags (`src/llm/thinking.rs`) |
-| Block-level streaming | ✅ | 🚧 | SSE `StreamChunk` events via gateway |
-| Tool-level streaming | ✅ | 🚧 | `ToolStarted`/`ToolCompleted`/`ToolResult` SSE events |
+| Block-level streaming | ✅ | ✅ | SSE `StreamChunk` events via gateway |
+| Tool-level streaming | ✅ | ✅ | `ToolStarted`/`ToolCompleted`/`ToolResult` SSE events |
 | Plugin tools | ✅ | ✅ | WASM tools |
 | Tool policies (allow/deny) | ✅ | ✅ | |
 | Exec approvals (`/approve`) | ✅ | ✅ | REPL approval cards with yes/no/always prompts |
@@ -158,8 +158,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | NEAR AI | ✅ | ✅ | - | Primary provider (Responses API + Chat Completions API) |
 | Anthropic (Claude) | ✅ | ✅ | - | Direct API via rig-core adapter (`src/llm/mod.rs`) |
 | OpenAI | ✅ | ✅ | - | Direct API via rig-core adapter (`src/llm/mod.rs`) |
-| AWS Bedrock | ✅ | 🔮 | P3 | Planned |
-| Google Gemini | ✅ | 🔮 | P3 | Planned |
+| AWS Bedrock | ✅ | ✅ | - | `BedrockProvider` with SigV4 auth, Converse API (`src/llm/bedrock.rs`) |
+| Google Gemini | ✅ | ✅ | - | `GeminiProvider` with REST API, function calling (`src/llm/gemini.rs`) |
 | OpenRouter | ✅ | ✅ | - | Via OpenAI-compatible endpoint config |
 | Ollama (local) | ✅ | ✅ | - | Direct provider via rig-core adapter (`src/llm/mod.rs`) |
 | node-llama-cpp | ✅ | ➖ | - | N/A for Rust |
@@ -200,7 +200,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 |---------|----------|----------|-------|
 | Dynamic loading | ✅ | ✅ | WASM modules |
 | Manifest validation | ✅ | ✅ | WASM metadata |
-| HTTP path registration | ✅ | 🚧 | `PluginRoute` framework in `src/extensions/plugins.rs` |
+| HTTP path registration | ✅ | ✅ | `PluginRoute` framework in `src/extensions/plugins.rs` |
 | Workspace-relative install | ✅ | ✅ | ~/.ironclaw/tools/ |
 | Channel plugins | ✅ | ✅ | WASM channels |
 | Auth plugins | ✅ | ✅ | `PluginManager` with auth plugin lifecycle (`src/extensions/plugin_manager.rs`) |
@@ -209,7 +209,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Hook plugins | ✅ | ✅ | `PluginManager` + `HookEngine` with bundled hooks (`src/hooks/bundled.rs`) |
 | Provider plugins | ✅ | ✅ | `PluginManager` with provider plugin lifecycle (`src/extensions/plugin_manager.rs`) |
 | Plugin CLI (`install`, `list`) | ✅ | ✅ | `tool` + `plugins` subcommands |
-| ClawHub registry | ✅ | 🔮 | Discovery, planned |
+| ClawHub registry | ✅ | ✅ | `ClawHubClient` with search, download, SHA256 integrity verification (`src/extensions/clawhub.rs`) |
 
 ---
 
@@ -237,8 +237,8 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Session-based memory | ✅ | ✅ | |
 | Hybrid search (BM25 + vector) | ✅ | ✅ | RRF algorithm |
 | OpenAI embeddings | ✅ | ✅ | |
-| Gemini embeddings | ✅ | 🔮 | Planned |
-| Local embeddings | ✅ | 🔮 | Planned |
+| Gemini embeddings | ✅ | ✅ | `GeminiEmbeddings` with text-embedding-004 model (`src/workspace/gemini_embeddings.rs`) |
+| Local embeddings | ✅ | ✅ | `LocalEmbeddings` with hash-based BoW, TF-IDF weighting (`src/workspace/local_embeddings.rs`) |
 | SQLite-vec backend | ✅ | ➖ | IronClaw uses PostgreSQL + libSQL |
 | LanceDB backend | ✅ | 🔮 | Planned |
 | QMD backend | ✅ | 🔮 | Planned |
@@ -292,7 +292,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 |---------|----------|----------|----------|-------|
 | Control UI Dashboard | ✅ | ✅ | - | Web gateway with chat, memory, jobs, logs, extensions |
 | Channel status view | ✅ | ✅ | - | `ChannelStatusTracker` with per-channel metrics, SSE events (`src/channels/status_tracker.rs`) |
-| Agent management | ✅ | 🚧 | - | CLI agent management done; web UI pending |
+| Agent management | ✅ | ✅ | - | CLI agent management + web UI REST API (`src/channels/web/agent_management.rs`) |
 | Model selection | ✅ | ✅ | - | REPL `/model` command |
 | Config editing | ✅ | ✅ | - | `build_config_schema()` + `validate_config_update()` with 9 sections (`src/channels/web/config_editor.rs`) |
 | Debug/logs viewer | ✅ | ✅ | - | Real-time log streaming with level/target filters |
@@ -321,7 +321,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Workspace hooks | ✅ | ✅ | - | `HookSource::Workspace` with `HookAction` support |
 | Outbound webhooks | ✅ | ✅ | - | `WebhookManager` with HMAC signing, retry (`src/hooks/webhooks.rs`) |
 | Heartbeat system | ✅ | ✅ | - | Periodic execution |
-| Gmail pub/sub | ✅ | 🔮 | P3 | Planned |
+| Gmail pub/sub | ✅ | ✅ | - | `GmailPubSubHandler` with watch setup, history fetch, deduplication (`src/hooks/gmail_pubsub.rs`) |
 
 ---
 
@@ -331,15 +331,15 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 |---------|----------|----------|-------|
 | Gateway token auth | ✅ | ✅ | Bearer token auth on web gateway |
 | Device pairing | ✅ | ✅ | `DevicePairingManager` with challenge codes (`src/pairing/device.rs`) |
-| Tailscale identity | ✅ | 🔮 | Planned |
-| OAuth flows | ✅ | 🚧 | NEAR AI OAuth + extension OAuth 2.1 |
+| Tailscale identity | ✅ | ✅ | `TailscaleIntegration::identify_peer()` via WhoIs API (`src/channels/web/tailscale.rs`) |
+| OAuth flows | ✅ | ✅ | `OAuthFlowManager` with PKCE S256, token refresh (`src/safety/oauth.rs`) |
 | DM pairing verification | ✅ | ✅ | ironclaw pairing approve, host APIs |
-| Allowlist/blocklist | ✅ | 🚧 | allow_from + pairing store |
+| Allowlist/blocklist | ✅ | ✅ | `AccessControlList` with AllowAll/AllowList/BlockList modes, glob matching (`src/safety/allowlist.rs`) |
 | Per-group tool policies | ✅ | ✅ | `GroupPolicyManager` with allow/deny/require-approval (`src/safety/group_policies.rs`) |
 | Exec approvals | ✅ | ✅ | REPL approval cards with yes/no/always |
 | TLS 1.3 minimum | ✅ | ✅ | reqwest rustls |
 | SSRF protection | ✅ | ✅ | WASM allowlist |
-| Loopback-first | ✅ | 🚧 | HTTP binds 0.0.0.0 |
+| Loopback-first | ✅ | ✅ | `NetworkMode::Loopback` binds to 127.0.0.1 by default (`src/channels/web/network_mode.rs`) |
 | Docker sandbox | ✅ | ✅ | Orchestrator/worker containers |
 | WASM sandbox | ❌ | ✅ | IronClaw innovation |
 | Tool policies | ✅ | ✅ | |
@@ -410,7 +410,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 - ✅ Gateway PID lock + launchd/systemd integration
 - ✅ JSON5/YAML config format support
 - ✅ Embeddings batching + citation support
-- ✅ Direct provider support (Anthropic, OpenAI, Ollama, OpenAI-compatible/OpenRouter)
+- ✅ Direct provider support (Anthropic, OpenAI, Ollama, OpenAI-compatible/OpenRouter, Google Gemini, AWS Bedrock)
 
 ### P1 - High Priority (Remaining)
 - ❌ WhatsApp channel
@@ -435,14 +435,19 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 - ✅ Nodes CLI (device management)
 - ✅ transcribeAudio hook handler
 
-### P3 - Lower Priority (Remaining)
+### P3 - Lower Priority (Mostly Complete)
 - ❌ Messaging channels (Discord, Signal, Matrix, iMessage, etc.)
-- 🔮 AWS Bedrock provider
-- 🔮 Google Gemini provider
-- 🔮 Gemini/local embeddings
-- 🔮 Tailscale integration
-- 🔮 Bonjour/mDNS discovery
-- 🔮 Gmail pub/sub
+- ✅ AWS Bedrock provider (`src/llm/bedrock.rs`)
+- ✅ Google Gemini provider (`src/llm/gemini.rs`)
+- ✅ Gemini/local embeddings (`src/workspace/gemini_embeddings.rs`, `src/workspace/local_embeddings.rs`)
+- ✅ Tailscale integration (`src/channels/web/tailscale.rs`)
+- ✅ Bonjour/mDNS discovery (`src/channels/web/mdns.rs`)
+- ✅ Gmail pub/sub (`src/hooks/gmail_pubsub.rs`)
+- ✅ ClawHub registry client (`src/extensions/clawhub.rs`)
+- ✅ OAuth 2.0/2.1 flows (`src/safety/oauth.rs`)
+- ✅ General allowlist/blocklist (`src/safety/allowlist.rs`)
+- ✅ Network modes (`src/channels/web/network_mode.rs`)
+- ✅ Agent management web UI (`src/channels/web/agent_management.rs`)
 - 🔮 Usage tracking from provider APIs
 
 ---

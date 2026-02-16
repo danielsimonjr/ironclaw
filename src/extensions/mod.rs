@@ -13,6 +13,7 @@
 //!    -> tool_activate("notion")    -> connects, registers tools
 //! ```
 
+pub mod clawhub;
 pub mod discovery;
 pub mod manager;
 pub mod plugin_manager;

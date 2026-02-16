@@ -274,6 +274,10 @@ pub enum LlmBackend {
     Ollama,
     /// Any OpenAI-compatible endpoint (e.g. vLLM, LiteLLM, Together)
     OpenAiCompatible,
+    /// Google Gemini API
+    Gemini,
+    /// AWS Bedrock
+    Bedrock,
 }
 
 impl std::str::FromStr for LlmBackend {
@@ -286,8 +290,10 @@ impl std::str::FromStr for LlmBackend {
             "anthropic" | "claude" => Ok(Self::Anthropic),
             "ollama" => Ok(Self::Ollama),
             "openai_compatible" | "openai-compatible" | "compatible" => Ok(Self::OpenAiCompatible),
+            "gemini" | "google" | "google_gemini" => Ok(Self::Gemini),
+            "bedrock" | "aws_bedrock" | "aws" => Ok(Self::Bedrock),
             _ => Err(format!(
-                "invalid LLM backend '{}', expected one of: nearai, openai, anthropic, ollama, openai_compatible",
+                "invalid LLM backend '{}', expected one of: nearai, openai, anthropic, ollama, openai_compatible, gemini, bedrock",
                 s
             )),
         }
@@ -302,6 +308,8 @@ impl std::fmt::Display for LlmBackend {
             Self::Anthropic => write!(f, "anthropic"),
             Self::Ollama => write!(f, "ollama"),
             Self::OpenAiCompatible => write!(f, "openai_compatible"),
+            Self::Gemini => write!(f, "gemini"),
+            Self::Bedrock => write!(f, "bedrock"),
         }
     }
 }
@@ -335,10 +343,27 @@ pub struct OpenAiCompatibleConfig {
     pub model: String,
 }
 
+/// Configuration for direct Google Gemini API access.
+#[derive(Debug, Clone)]
+pub struct GeminiDirectConfig {
+    pub api_key: SecretString,
+    pub model: String,
+}
+
+/// Configuration for AWS Bedrock.
+#[derive(Debug, Clone)]
+pub struct BedrockDirectConfig {
+    pub region: String,
+    pub access_key_id: SecretString,
+    pub secret_access_key: SecretString,
+    pub session_token: Option<SecretString>,
+    pub model_id: String,
+}
+
 /// LLM provider configuration.
 ///
 /// NEAR AI remains the default backend. Users can switch to other providers
-/// by setting `LLM_BACKEND` (e.g. `openai`, `anthropic`, `ollama`).
+/// by setting `LLM_BACKEND` (e.g. `openai`, `anthropic`, `ollama`, `gemini`, `bedrock`).
 #[derive(Debug, Clone)]
 pub struct LlmConfig {
     /// Which backend to use (default: NearAi)
@@ -353,6 +378,10 @@ pub struct LlmConfig {
     pub ollama: Option<OllamaConfig>,
     /// OpenAI-compatible config (populated when backend=openai_compatible)
     pub openai_compatible: Option<OpenAiCompatibleConfig>,
+    /// Gemini config (populated when backend=gemini)
+    pub gemini: Option<GeminiDirectConfig>,
+    /// AWS Bedrock config (populated when backend=bedrock)
+    pub bedrock: Option<BedrockDirectConfig>,
 }
 
 /// API mode for NEAR AI.
@@ -500,6 +529,50 @@ impl LlmConfig {
             None
         };
 
+        let gemini = if backend == LlmBackend::Gemini {
+            let api_key = optional_env("GEMINI_API_KEY")?
+                .map(SecretString::from)
+                .ok_or_else(|| ConfigError::MissingRequired {
+                    key: "GEMINI_API_KEY".to_string(),
+                    hint: "Set GEMINI_API_KEY when LLM_BACKEND=gemini".to_string(),
+                })?;
+            let model =
+                optional_env("GEMINI_MODEL")?.unwrap_or_else(|| "gemini-2.0-flash".to_string());
+            Some(GeminiDirectConfig { api_key, model })
+        } else {
+            None
+        };
+
+        let bedrock = if backend == LlmBackend::Bedrock {
+            let region = optional_env("AWS_REGION")?
+                .or_else(|| optional_env("AWS_DEFAULT_REGION").ok().flatten())
+                .unwrap_or_else(|| "us-east-1".to_string());
+            let access_key_id = optional_env("AWS_ACCESS_KEY_ID")?
+                .map(SecretString::from)
+                .ok_or_else(|| ConfigError::MissingRequired {
+                    key: "AWS_ACCESS_KEY_ID".to_string(),
+                    hint: "Set AWS_ACCESS_KEY_ID when LLM_BACKEND=bedrock".to_string(),
+                })?;
+            let secret_access_key = optional_env("AWS_SECRET_ACCESS_KEY")?
+                .map(SecretString::from)
+                .ok_or_else(|| ConfigError::MissingRequired {
+                    key: "AWS_SECRET_ACCESS_KEY".to_string(),
+                    hint: "Set AWS_SECRET_ACCESS_KEY when LLM_BACKEND=bedrock".to_string(),
+                })?;
+            let session_token = optional_env("AWS_SESSION_TOKEN")?.map(SecretString::from);
+            let model_id = optional_env("BEDROCK_MODEL_ID")?
+                .unwrap_or_else(|| "anthropic.claude-sonnet-4-20250514-v1:0".to_string());
+            Some(BedrockDirectConfig {
+                region,
+                access_key_id,
+                secret_access_key,
+                session_token,
+                model_id,
+            })
+        } else {
+            None
+        };
+
         Ok(Self {
             backend,
             nearai,
@@ -507,6 +580,8 @@ impl LlmConfig {
             anthropic,
             ollama,
             openai_compatible,
+            gemini,
+            bedrock,
         })
     }
 }
