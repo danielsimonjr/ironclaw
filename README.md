@@ -95,6 +95,7 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 - **Vision Models** - GPT-4V/Claude vision integration
 - **Sticker Conversion** - WebP/TGS/animated WebP support
 - **Media Caching** - TTL-based LRU cache with size limits
+- **Large Document Processing** - RLM-based recursive processing for documents exceeding LLM context windows, with structured operations (slicing, chunking, search, recursive sub-queries)
 
 ## Installation
 
@@ -298,7 +299,7 @@ External content passes through multiple security layers:
 | **Workspace** | Persistent memory with hybrid search, connections, spaces, and profiles |
 | **Safety Layer** | Prompt injection defense, leak detection, log redaction, and content sanitization |
 | **Skills** | Modular capability bundles with tools, prompts, and policies |
-| **Media** | Image, audio, video, PDF, TTS, vision, and sticker processing |
+| **Media** | Image, audio, video, PDF, TTS, vision, sticker, and large document processing |
 
 ### Dual Database Backend
 
