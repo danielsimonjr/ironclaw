@@ -38,38 +38,71 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 
 - **WASM Sandbox** - Untrusted tools run in isolated WebAssembly containers with capability-based permissions
 - **Credential Protection** - Secrets are never exposed to tools; injected at the host boundary with leak detection
-- **Prompt Injection Defense** - Pattern detection, content sanitization, and policy enforcement
+- **Prompt Injection Defense** - Pattern detection, Unicode normalization, content sanitization, and policy enforcement
 - **Endpoint Allowlisting** - HTTP requests only to explicitly approved hosts and paths
+- **Log Redaction** - Automatic redaction of API keys, Bearer tokens, JWTs, and credentials from log output
+- **SSRF Prevention** - DNS rebinding protection, private IP rejection, redirect blocking
+- **Elevated Mode** - Time-limited privileged execution with full audit tracking
 
 ### Always Available
 
 - **Multi-channel** - REPL, HTTP webhooks, WASM channels (Telegram, Slack), and web gateway
 - **Docker Sandbox** - Isolated container execution with per-job tokens and orchestrator/worker pattern
-- **Web Gateway** - Browser UI with real-time SSE/WebSocket streaming
+- **Web Gateway** - Browser UI with real-time SSE/WebSocket streaming, canvas (A2UI), config editor
 - **Routines** - Cron schedules, event triggers, webhook handlers for background automation
+- **Hooks System** - Lifecycle hooks (beforeInbound, beforeOutbound, beforeToolCall, etc.) with 8 bundled hooks
 - **Heartbeat System** - Proactive background execution for monitoring and maintenance tasks
 - **Parallel Jobs** - Handle multiple requests concurrently with isolated contexts
 - **Self-repair** - Automatic detection and recovery of stuck operations
+
+### Multi-Provider LLM Support
+
+- **NEAR AI** - Session-based auth with Responses API + Chat Completions API
+- **OpenAI** - Direct API integration via rig-core adapter
+- **Anthropic (Claude)** - Direct API integration via rig-core adapter
+- **Google Gemini** - REST API with function calling support
+- **AWS Bedrock** - SigV4 authentication with Converse API
+- **Ollama** - Local inference, no account needed
+- **OpenAI-compatible** - vLLM, LiteLLM, Together, OpenRouter, and more
+- **Failover Chains** - Priority-based multi-provider failover with cooldown and exponential backoff
+- **Auto-discovery** - Automatic model listing for OpenAI, Anthropic, and Ollama
+- **Thinking Modes** - Low/medium/high reasoning depth with configurable temperature and token limits
 
 ### Self-Expanding
 
 - **Dynamic Tool Building** - Describe what you need, and IronClaw builds it as a WASM tool
 - **MCP Protocol** - Connect to Model Context Protocol servers for additional capabilities
 - **Plugin Architecture** - Drop in new WASM tools and channels without restarting
+- **ClawHub Registry** - Search, download, and verify extensions from ClawHub with SHA256 integrity checks
 
 ### Persistent Memory
 
 - **Hybrid Search** - Full-text + vector search using Reciprocal Rank Fusion
 - **Workspace Filesystem** - Flexible path-based storage for notes, logs, and context
 - **Identity Files** - Maintain consistent personality and preferences across sessions
+- **Knowledge Graph** - Typed connections (updates, extends, derives) between memories
+- **Spaces** - Named collections for organizing memories by topic or project
+- **User Profiles** - Auto-maintained fact profiles for personalization
+- **Multiple Embedding Backends** - OpenAI, Google Gemini, and local hash-based BoW embeddings
+
+### Media Handling
+
+- **Image Processing** - Dimension detection, format parsing
+- **Audio Transcription** - Whisper API integration
+- **Video Metadata** - MP4/WebM/AVI/MOV/MKV extraction
+- **PDF Parsing** - Text stream extraction
+- **Text-to-Speech** - OpenAI TTS and Edge TTS with 10 voices
+- **Vision Models** - GPT-4V/Claude vision integration
+- **Sticker Conversion** - WebP/TGS/animated WebP support
+- **Media Caching** - TTL-based LRU cache with size limits
 
 ## Installation
 
 ### Prerequisites
 
-- Rust 1.85+
-- PostgreSQL 15+ with [pgvector](https://github.com/pgvector/pgvector) extension
-- LLM provider account or API key (configured via setup wizard; supports NEAR AI, OpenAI, Anthropic, Ollama, and OpenAI-compatible endpoints)
+- Rust 1.92+
+- PostgreSQL 15+ with [pgvector](https://github.com/pgvector/pgvector) extension, **or** libSQL/Turso (embedded, no server needed)
+- LLM provider account or API key (configured via setup wizard; supports NEAR AI, OpenAI, Anthropic, Google Gemini, AWS Bedrock, Ollama, and OpenAI-compatible endpoints)
 
 ## Download or Build
 
@@ -109,8 +142,11 @@ Install it with `cargo`, just make sure you have [Rust](https://rustup.rs) insta
 git clone https://github.com/nearai/ironclaw.git
 cd ironclaw
 
-# Build
+# Build (PostgreSQL backend, default)
 cargo build --release
+
+# Or build with libSQL backend (no PostgreSQL needed)
+cargo build --release --no-default-features --features libsql
 
 # Run tests
 cargo test
@@ -122,12 +158,22 @@ For **full release** (after modifying channel sources), run `./scripts/build-all
 
 ### Database Setup
 
+**PostgreSQL (default):**
+
 ```bash
 # Create database
 createdb ironclaw
 
 # Enable pgvector
 psql ironclaw -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+**libSQL/Turso (embedded alternative):**
+
+No setup required. The database is created automatically at `~/.ironclaw/ironclaw.db`. Configure with:
+
+```bash
+DATABASE_BACKEND=libsql
 ```
 
 ## Configuration
@@ -139,8 +185,22 @@ ironclaw onboard
 ```
 
 The wizard handles database connection, LLM provider selection (NEAR AI, OpenAI,
-Anthropic, Ollama, or OpenAI-compatible), and secrets encryption (using your system
-keychain). All settings are saved to `~/.ironclaw/settings.json`.
+Anthropic, Google Gemini, AWS Bedrock, Ollama, or OpenAI-compatible), and secrets
+encryption (using your system keychain). All settings are saved to
+`~/.ironclaw/settings.json`.
+
+### Environment Variables
+
+Key configuration options (see `.env.example` for the full list):
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_BACKEND` | `postgres` (default) or `libsql` |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `LLM_BACKEND` | `nearai`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `gemini`, `bedrock` |
+| `GATEWAY_ENABLED` | Enable web UI gateway |
+| `SANDBOX_ENABLED` | Enable Docker container isolation |
+| `HEARTBEAT_ENABLED` | Enable proactive background execution |
 
 ## Security
 
@@ -166,17 +226,21 @@ WASM ──► Allowlist ──► Leak Scan ──► Credential ──► Exec
 
 External content passes through multiple security layers:
 
+- Unicode normalization (zero-width chars, homoglyph detection)
 - Pattern-based detection of injection attempts
-- Content sanitization and escaping
+- Content sanitization and escaping with recursion depth limits
 - Policy rules with severity levels (Block/Warn/Review/Sanitize)
 - Tool output wrapping for safe LLM context injection
 
 ### Data Protection
 
-- All data stored locally in your PostgreSQL database
+- All data stored locally in your PostgreSQL or libSQL database
 - Secrets encrypted with AES-256-GCM
+- System keychain integration (macOS Keychain, Linux GNOME Keyring/KWallet)
 - No telemetry, analytics, or data sharing
 - Full audit log of all tool executions
+- Log redaction of sensitive data (API keys, tokens, credentials)
+- Constant-time token comparison to prevent timing attacks
 
 ## Architecture
 
@@ -223,15 +287,27 @@ External content passes through multiple security layers:
 
 | Component | Purpose |
 |-----------|---------|
-| **Agent Loop** | Main message handling and job coordination |
+| **Agent Loop** | Main message handling, multi-agent routing, and job coordination |
 | **Router** | Classifies user intent (command, query, task) |
 | **Scheduler** | Manages parallel job execution with priorities |
 | **Worker** | Executes jobs with LLM reasoning and tool calls |
 | **Orchestrator** | Container lifecycle, LLM proxying, per-job auth |
-| **Web Gateway** | Browser UI with chat, memory, jobs, logs, extensions, routines |
+| **Web Gateway** | Browser UI with chat, memory, jobs, logs, extensions, routines, canvas, config editor |
 | **Routines Engine** | Scheduled (cron) and reactive (event, webhook) background tasks |
-| **Workspace** | Persistent memory with hybrid search |
-| **Safety Layer** | Prompt injection defense and content sanitization |
+| **Hooks Engine** | Lifecycle hooks with shell/HTTP/inline/webhook actions |
+| **Workspace** | Persistent memory with hybrid search, connections, spaces, and profiles |
+| **Safety Layer** | Prompt injection defense, leak detection, log redaction, and content sanitization |
+| **Skills** | Modular capability bundles with tools, prompts, and policies |
+| **Media** | Image, audio, video, PDF, TTS, vision, and sticker processing |
+
+### Dual Database Backend
+
+IronClaw supports two database backends via compile-time feature flags:
+
+| Backend | Feature | Best For |
+|---------|---------|----------|
+| **PostgreSQL** | `postgres` (default) | Production deployments, full vector search |
+| **libSQL/Turso** | `libsql` | Embedded/edge deployment, zero-config setup |
 
 ## Usage
 
@@ -244,7 +320,43 @@ cargo run
 
 # With debug logging
 RUST_LOG=ironclaw=debug cargo run
+
+# System diagnostics
+ironclaw doctor
+
+# Manage gateway
+ironclaw gateway start
+ironclaw gateway status
 ```
+
+### CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `run` | Start interactive REPL (default) |
+| `onboard` | Interactive setup wizard |
+| `doctor` | System diagnostics |
+| `config` | Read/write configuration |
+| `status` | System status overview |
+| `memory` | Search, read, write, tree, spaces, profile, connect |
+| `tool` | WASM tool management |
+| `mcp` | MCP server management |
+| `gateway` | Web gateway start/stop/status |
+| `sessions` | Session list/prune |
+| `hooks` | Lifecycle hook management |
+| `cron` | Routine list/enable/disable/history |
+| `channels` | Channel list/status/enable/disable |
+| `plugins` | Plugin list/install/remove |
+| `agents` | Agent identity management |
+| `pairing` | DM pairing approval |
+| `logs` | Log tail/search/filter |
+| `message` | Send messages to channels |
+| `webhooks` | Webhook list/add/remove/test |
+| `skills` | Skill list/enable/disable |
+| `nodes` | Device management |
+| `browser` | Browser automation |
+| `completion` | Shell completion generation |
+| `service` | systemd/launchd service file generation |
 
 ## Development
 
@@ -261,10 +373,15 @@ cargo test
 
 # Run specific test
 cargo test test_name
+
+# Build with libSQL instead of PostgreSQL
+cargo build --no-default-features --features libsql
 ```
 
 - **Telegram channel**: See [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md) for setup and DM pairing.
+- **Building channels**: See [docs/BUILDING_CHANNELS.md](docs/BUILDING_CHANNELS.md) for WASM channel development.
 - **Changing channel sources**: Run `./channels-src/telegram/build.sh` before `cargo build` so the updated WASM is bundled.
+- **Feature parity**: See [FEATURE_PARITY.md](FEATURE_PARITY.md) for the complete IronClaw vs OpenClaw tracking matrix.
 
 ## OpenClaw Heritage
 
@@ -274,8 +391,9 @@ Key differences:
 
 - **Rust vs TypeScript** - Native performance, memory safety, single binary
 - **WASM sandbox vs Docker** - Lightweight, capability-based security
-- **PostgreSQL vs SQLite** - Production-ready persistence
-- **Security-first design** - Multiple defense layers, credential protection
+- **Dual database backend** - PostgreSQL for production, libSQL/Turso for embedded/edge
+- **Security-first design** - Multiple defense layers, credential protection, log redaction
+- **Multi-provider LLM** - 7+ providers with failover, auto-discovery, and thinking modes
 
 ## License
 
