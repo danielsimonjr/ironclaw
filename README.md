@@ -112,15 +112,25 @@ Visit [Releases page](https://github.com/nearai/ironclaw/releases/) to see the l
 <details>
   <summary>Install via Windows Installer (Windows)</summary>
 
-Download the [Windows Installer](https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-x86_64-pc-windows-msvc.msi) and run it.
+Download the [Windows Installer (.msi)](https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-x86_64-pc-windows-msvc.msi) and run it. The MSI installs per-user to `LocalAppData\Programs\IronClaw` and adds `ironclaw` to your PATH automatically.
 
 </details>
 
 <details>
-  <summary>Install via powershell script (Windows)</summary>
+  <summary>Install via PowerShell script (Windows)</summary>
 
 ```sh
 irm https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
+```
+
+The PowerShell installer supports additional options when saved and run as a script:
+
+```powershell
+.\ironclaw-installer.ps1                          # Install latest to default location
+.\ironclaw-installer.ps1 -Version 0.1.3           # Install specific version
+.\ironclaw-installer.ps1 -InstallDir "C:\tools"   # Custom install directory
+.\ironclaw-installer.ps1 -NoPathUpdate             # Skip PATH modification
+.\ironclaw-installer.ps1 -UseMsi                   # Use MSI installer instead
 ```
 
 </details>

@@ -234,7 +234,14 @@ ironclaw/
 ├── docs/                   # Additional documentation
 │   ├── BUILDING_CHANNELS.md
 │   └── TELEGRAM_SETUP.md
-├── deploy/                 # Deployment configs (systemd, setup scripts, GCP)
+├── deploy/                 # Deployment configs (systemd, setup scripts, GCP, Windows installer)
+│   ├── cloud-sql-proxy.service
+│   ├── ironclaw.service
+│   ├── setup.sh
+│   ├── env.example
+│   └── windows/            # Windows installer files
+│       ├── ironclaw-installer.ps1  # PowerShell installer script
+│       └── ironclaw.wxs           # WiX MSI source
 ├── docker/                 # Container images (sandbox.Dockerfile)
 ├── examples/               # Example code (test_heartbeat.rs)
 ├── .claude/                # Claude Code custom commands
@@ -243,7 +250,7 @@ ironclaw/
 │       ├── add-sse-event.md
 │       ├── trace.md
 │       └── ship.md
-├── .github/workflows/      # CI (test, code_style, release, release-plz)
+├── .github/workflows/      # CI (test, code_style, release, release-plz, windows-installer)
 ├── build.rs                # Build script (compiles Telegram channel WASM)
 ├── Cargo.toml              # Rust 2024 edition, MSRV 1.92
 ├── Dockerfile              # Main service container
@@ -375,5 +382,20 @@ Config loads with priority: environment variables > database settings > defaults
 - **code_style.yml** — Runs `cargo fmt --check` and `cargo clippy` on PR and push
 - **release.yml** — Builds release binaries for all platforms (macOS, Linux, Windows) via `cargo-dist`
 - **release-plz.yml** — Automated version bumping and changelog generation
+- **windows-installer.yml** — Uploads PowerShell installer script (`ironclaw-installer.ps1`) to GitHub Releases on publish
 
 Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`.
+
+### Windows Installer
+
+The `deploy/windows/` directory contains Windows-specific installation tooling:
+
+- **`ironclaw-installer.ps1`** — PowerShell installer script supporting:
+  - One-liner install: `irm https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex`
+  - Architecture detection (x86_64, ARM64 via emulation)
+  - Latest version auto-detection via GitHub API
+  - Dual install modes: archive-based (tar.gz) or MSI (`-UseMsi`)
+  - Custom install directory (`-InstallDir`), version pinning (`-Version`), PATH opt-out (`-NoPathUpdate`)
+  - CARGO_HOME/bin detection with LocalAppData fallback
+  - Upgrade handling for existing installations
+- **`ironclaw.wxs`** — WiX v3 source for MSI builds via `cargo-wix`/`cargo-dist`, per-user install scope with PATH integration. GUIDs must match `[package.metadata.wix]` in `Cargo.toml`.
