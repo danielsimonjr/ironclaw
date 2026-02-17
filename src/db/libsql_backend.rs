@@ -3078,3 +3078,176 @@ fn row_to_routine_run_libsql(row: &libsql::Row) -> Result<RoutineRun, DatabaseEr
         created_at: get_ts(row, 10),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Datelike, Timelike};
+
+    // ==================== parse_timestamp tests ====================
+
+    #[test]
+    fn test_parse_timestamp_rfc3339_utc() {
+        let result = parse_timestamp("2024-01-15T10:30:00.123Z").unwrap();
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.month(), 1);
+        assert_eq!(result.day(), 15);
+        assert_eq!(result.hour(), 10);
+        assert_eq!(result.minute(), 30);
+    }
+
+    #[test]
+    fn test_parse_timestamp_rfc3339_with_offset() {
+        let result = parse_timestamp("2024-06-01T12:00:00+05:00").unwrap();
+        // Should be converted to UTC: 07:00:00
+        assert_eq!(result.hour(), 7);
+    }
+
+    #[test]
+    fn test_parse_timestamp_naive_with_fractional() {
+        let result = parse_timestamp("2024-01-15 10:30:00.123").unwrap();
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.month(), 1);
+        assert_eq!(result.day(), 15);
+    }
+
+    #[test]
+    fn test_parse_timestamp_naive_without_fractional() {
+        let result = parse_timestamp("2024-01-15 10:30:00").unwrap();
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.hour(), 10);
+        assert_eq!(result.minute(), 30);
+    }
+
+    #[test]
+    fn test_parse_timestamp_invalid() {
+        assert!(parse_timestamp("not-a-timestamp").is_err());
+        assert!(parse_timestamp("").is_err());
+        assert!(parse_timestamp("2024-13-45").is_err());
+    }
+
+    // ==================== fmt_ts tests ====================
+
+    #[test]
+    fn test_fmt_ts_roundtrip() {
+        let now = Utc::now();
+        let formatted = fmt_ts(&now);
+        let parsed = parse_timestamp(&formatted).unwrap();
+        // Should round-trip within millisecond precision
+        let diff = (now - parsed).num_milliseconds().abs();
+        assert!(diff <= 1, "round-trip diff was {}ms", diff);
+    }
+
+    #[test]
+    fn test_fmt_ts_format() {
+        let dt = DateTime::parse_from_rfc3339("2024-03-15T08:30:00.500Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let formatted = fmt_ts(&dt);
+        assert!(formatted.contains("2024-03-15"));
+        assert!(formatted.ends_with('Z'));
+    }
+
+    // ==================== fmt_opt_ts tests ====================
+
+    #[test]
+    fn test_fmt_opt_ts_some() {
+        let dt = Utc::now();
+        let val = fmt_opt_ts(&Some(dt));
+        assert!(matches!(val, libsql::Value::Text(_)));
+    }
+
+    #[test]
+    fn test_fmt_opt_ts_none() {
+        let val = fmt_opt_ts(&None);
+        assert!(matches!(val, libsql::Value::Null));
+    }
+
+    // ==================== parse_job_state tests ====================
+
+    #[test]
+    fn test_parse_job_state_all_variants() {
+        assert_eq!(parse_job_state("pending"), JobState::Pending);
+        assert_eq!(parse_job_state("in_progress"), JobState::InProgress);
+        assert_eq!(parse_job_state("completed"), JobState::Completed);
+        assert_eq!(parse_job_state("submitted"), JobState::Submitted);
+        assert_eq!(parse_job_state("accepted"), JobState::Accepted);
+        assert_eq!(parse_job_state("failed"), JobState::Failed);
+        assert_eq!(parse_job_state("stuck"), JobState::Stuck);
+        assert_eq!(parse_job_state("cancelled"), JobState::Cancelled);
+    }
+
+    #[test]
+    fn test_parse_job_state_unknown_defaults_to_pending() {
+        assert_eq!(parse_job_state("unknown"), JobState::Pending);
+        assert_eq!(parse_job_state(""), JobState::Pending);
+        assert_eq!(parse_job_state("PENDING"), JobState::Pending); // case-sensitive
+    }
+
+    // ==================== opt_text tests ====================
+
+    #[test]
+    fn test_opt_text_some() {
+        let val = opt_text(Some("hello"));
+        assert!(matches!(val, libsql::Value::Text(s) if s == "hello"));
+    }
+
+    #[test]
+    fn test_opt_text_none() {
+        let val = opt_text(None);
+        assert!(matches!(val, libsql::Value::Null));
+    }
+
+    #[test]
+    fn test_opt_text_empty_string() {
+        let val = opt_text(Some(""));
+        assert!(matches!(val, libsql::Value::Text(s) if s.is_empty()));
+    }
+
+    // ==================== opt_text_owned tests ====================
+
+    #[test]
+    fn test_opt_text_owned_some() {
+        let val = opt_text_owned(Some("world".to_string()));
+        assert!(matches!(val, libsql::Value::Text(s) if s == "world"));
+    }
+
+    #[test]
+    fn test_opt_text_owned_none() {
+        let val = opt_text_owned(None);
+        assert!(matches!(val, libsql::Value::Null));
+    }
+
+    // ==================== parse_timestamp edge cases ====================
+
+    #[test]
+    fn test_parse_timestamp_epoch() {
+        let result = parse_timestamp("1970-01-01T00:00:00Z").unwrap();
+        assert_eq!(result.timestamp(), 0);
+    }
+
+    #[test]
+    fn test_parse_timestamp_far_future() {
+        let result = parse_timestamp("2099-12-31T23:59:59Z").unwrap();
+        assert_eq!(Datelike::year(&result), 2099);
+    }
+
+    #[test]
+    fn test_parse_timestamp_microsecond_precision() {
+        // Naive with fractional seconds supports subsecond precision
+        let result = parse_timestamp("2024-06-15 12:30:45.123456").unwrap();
+        assert_eq!(Timelike::second(&result), 45);
+    }
+
+    // ==================== fmt_ts + parse_timestamp consistency ====================
+
+    #[test]
+    fn test_fmt_ts_is_rfc3339() {
+        let dt = DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let formatted = fmt_ts(&dt);
+        // Should be parseable by the first branch (RFC 3339)
+        assert!(DateTime::parse_from_rfc3339(&formatted).is_ok());
+    }
+}

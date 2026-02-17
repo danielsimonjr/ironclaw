@@ -1513,3 +1513,366 @@ where
         .transpose()
         .map(|opt| opt.unwrap_or(default))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== DatabaseBackend::from_str tests ====================
+
+    #[test]
+    fn test_database_backend_postgres_variants() {
+        assert_eq!(
+            "postgres".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::Postgres
+        );
+        assert_eq!(
+            "postgresql".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::Postgres
+        );
+        assert_eq!(
+            "pg".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::Postgres
+        );
+    }
+
+    #[test]
+    fn test_database_backend_libsql_variants() {
+        assert_eq!(
+            "libsql".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::LibSql
+        );
+        assert_eq!(
+            "turso".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::LibSql
+        );
+        assert_eq!(
+            "sqlite".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::LibSql
+        );
+    }
+
+    #[test]
+    fn test_database_backend_case_insensitive() {
+        assert_eq!(
+            "POSTGRES".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::Postgres
+        );
+        assert_eq!(
+            "PostgreSQL".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::Postgres
+        );
+        assert_eq!(
+            "LIBSQL".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::LibSql
+        );
+        assert_eq!(
+            "Turso".parse::<DatabaseBackend>().unwrap(),
+            DatabaseBackend::LibSql
+        );
+    }
+
+    #[test]
+    fn test_database_backend_invalid() {
+        assert!("mysql".parse::<DatabaseBackend>().is_err());
+        assert!("".parse::<DatabaseBackend>().is_err());
+        assert!("mongo".parse::<DatabaseBackend>().is_err());
+    }
+
+    #[test]
+    fn test_database_backend_default() {
+        assert_eq!(DatabaseBackend::default(), DatabaseBackend::Postgres);
+    }
+
+    // ==================== LlmBackend::from_str tests ====================
+
+    #[test]
+    fn test_llm_backend_nearai_variants() {
+        assert_eq!("nearai".parse::<LlmBackend>().unwrap(), LlmBackend::NearAi);
+        assert_eq!("near_ai".parse::<LlmBackend>().unwrap(), LlmBackend::NearAi);
+        assert_eq!("near".parse::<LlmBackend>().unwrap(), LlmBackend::NearAi);
+    }
+
+    #[test]
+    fn test_llm_backend_openai_variants() {
+        assert_eq!("openai".parse::<LlmBackend>().unwrap(), LlmBackend::OpenAi);
+        assert_eq!("open_ai".parse::<LlmBackend>().unwrap(), LlmBackend::OpenAi);
+    }
+
+    #[test]
+    fn test_llm_backend_anthropic_variants() {
+        assert_eq!(
+            "anthropic".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Anthropic
+        );
+        assert_eq!(
+            "claude".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Anthropic
+        );
+    }
+
+    #[test]
+    fn test_llm_backend_ollama() {
+        assert_eq!("ollama".parse::<LlmBackend>().unwrap(), LlmBackend::Ollama);
+    }
+
+    #[test]
+    fn test_llm_backend_compatible_variants() {
+        assert_eq!(
+            "openai_compatible".parse::<LlmBackend>().unwrap(),
+            LlmBackend::OpenAiCompatible
+        );
+        assert_eq!(
+            "openai-compatible".parse::<LlmBackend>().unwrap(),
+            LlmBackend::OpenAiCompatible
+        );
+        assert_eq!(
+            "compatible".parse::<LlmBackend>().unwrap(),
+            LlmBackend::OpenAiCompatible
+        );
+    }
+
+    #[test]
+    fn test_llm_backend_gemini_variants() {
+        assert_eq!("gemini".parse::<LlmBackend>().unwrap(), LlmBackend::Gemini);
+        assert_eq!("google".parse::<LlmBackend>().unwrap(), LlmBackend::Gemini);
+        assert_eq!(
+            "google_gemini".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Gemini
+        );
+    }
+
+    #[test]
+    fn test_llm_backend_bedrock_variants() {
+        assert_eq!(
+            "bedrock".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Bedrock
+        );
+        assert_eq!(
+            "aws_bedrock".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Bedrock
+        );
+        assert_eq!("aws".parse::<LlmBackend>().unwrap(), LlmBackend::Bedrock);
+    }
+
+    #[test]
+    fn test_llm_backend_openrouter_variants() {
+        assert_eq!(
+            "openrouter".parse::<LlmBackend>().unwrap(),
+            LlmBackend::OpenRouter
+        );
+        assert_eq!(
+            "open_router".parse::<LlmBackend>().unwrap(),
+            LlmBackend::OpenRouter
+        );
+    }
+
+    #[test]
+    fn test_llm_backend_case_insensitive() {
+        assert_eq!("OPENAI".parse::<LlmBackend>().unwrap(), LlmBackend::OpenAi);
+        assert_eq!(
+            "Anthropic".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Anthropic
+        );
+        assert_eq!("GEMINI".parse::<LlmBackend>().unwrap(), LlmBackend::Gemini);
+        assert_eq!(
+            "BEDROCK".parse::<LlmBackend>().unwrap(),
+            LlmBackend::Bedrock
+        );
+    }
+
+    #[test]
+    fn test_llm_backend_invalid() {
+        assert!("gpt4".parse::<LlmBackend>().is_err());
+        assert!("".parse::<LlmBackend>().is_err());
+        assert!("huggingface".parse::<LlmBackend>().is_err());
+    }
+
+    #[test]
+    fn test_llm_backend_default() {
+        assert_eq!(LlmBackend::default(), LlmBackend::NearAi);
+    }
+
+    // ==================== LlmBackend Display roundtrip ====================
+
+    #[test]
+    fn test_llm_backend_display_roundtrip() {
+        let backends = [
+            LlmBackend::NearAi,
+            LlmBackend::OpenAi,
+            LlmBackend::Anthropic,
+            LlmBackend::Ollama,
+            LlmBackend::OpenAiCompatible,
+            LlmBackend::Gemini,
+            LlmBackend::Bedrock,
+            LlmBackend::OpenRouter,
+        ];
+        for backend in backends {
+            let display = backend.to_string();
+            let parsed: LlmBackend = display.parse().unwrap();
+            assert_eq!(backend, parsed, "roundtrip failed for {display}");
+        }
+    }
+
+    // ==================== NearAiApiMode::from_str tests ====================
+
+    #[test]
+    fn test_nearai_api_mode_responses() {
+        assert_eq!(
+            "responses".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::Responses
+        );
+        assert_eq!(
+            "response".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::Responses
+        );
+    }
+
+    #[test]
+    fn test_nearai_api_mode_chat_completions() {
+        assert_eq!(
+            "chat_completions".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::ChatCompletions
+        );
+        assert_eq!(
+            "chatcompletions".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::ChatCompletions
+        );
+        assert_eq!(
+            "chat".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::ChatCompletions
+        );
+        assert_eq!(
+            "completions".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::ChatCompletions
+        );
+    }
+
+    #[test]
+    fn test_nearai_api_mode_case_insensitive() {
+        assert_eq!(
+            "RESPONSES".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::Responses
+        );
+        assert_eq!(
+            "Chat_Completions".parse::<NearAiApiMode>().unwrap(),
+            NearAiApiMode::ChatCompletions
+        );
+    }
+
+    #[test]
+    fn test_nearai_api_mode_invalid() {
+        assert!("streaming".parse::<NearAiApiMode>().is_err());
+        assert!("".parse::<NearAiApiMode>().is_err());
+    }
+
+    #[test]
+    fn test_nearai_api_mode_default() {
+        assert_eq!(NearAiApiMode::default(), NearAiApiMode::Responses);
+    }
+
+    // ==================== optional_env tests ====================
+
+    #[test]
+    fn test_optional_env_not_present() {
+        // Use a unique key that is definitely not set
+        let result = optional_env("IRONCLAW_TEST_NOT_SET_12345").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_optional_env_set() {
+        unsafe { std::env::set_var("IRONCLAW_TEST_OPT_ENV_SET", "hello") };
+        let result = optional_env("IRONCLAW_TEST_OPT_ENV_SET").unwrap();
+        assert_eq!(result, Some("hello".to_string()));
+        unsafe { std::env::remove_var("IRONCLAW_TEST_OPT_ENV_SET") };
+    }
+
+    #[test]
+    fn test_optional_env_empty_string() {
+        unsafe { std::env::set_var("IRONCLAW_TEST_OPT_ENV_EMPTY", "") };
+        let result = optional_env("IRONCLAW_TEST_OPT_ENV_EMPTY").unwrap();
+        assert!(result.is_none(), "empty string should be treated as None");
+        unsafe { std::env::remove_var("IRONCLAW_TEST_OPT_ENV_EMPTY") };
+    }
+
+    // ==================== parse_optional_env tests ====================
+
+    #[test]
+    fn test_parse_optional_env_with_default() {
+        let result: Result<usize, _> = parse_optional_env("IRONCLAW_TEST_PARSE_NOT_SET_999", 42);
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_parse_optional_env_with_value() {
+        unsafe { std::env::set_var("IRONCLAW_TEST_PARSE_ENV_VAL", "100") };
+        let result: Result<usize, _> = parse_optional_env("IRONCLAW_TEST_PARSE_ENV_VAL", 42);
+        assert_eq!(result.unwrap(), 100);
+        unsafe { std::env::remove_var("IRONCLAW_TEST_PARSE_ENV_VAL") };
+    }
+
+    #[test]
+    fn test_parse_optional_env_invalid_value() {
+        unsafe { std::env::set_var("IRONCLAW_TEST_PARSE_ENV_BAD", "not_a_number") };
+        let result: Result<usize, _> = parse_optional_env("IRONCLAW_TEST_PARSE_ENV_BAD", 42);
+        assert!(result.is_err());
+        unsafe { std::env::remove_var("IRONCLAW_TEST_PARSE_ENV_BAD") };
+    }
+
+    #[test]
+    fn test_parse_optional_env_bool() {
+        unsafe { std::env::set_var("IRONCLAW_TEST_PARSE_BOOL", "true") };
+        let result: Result<bool, _> = parse_optional_env("IRONCLAW_TEST_PARSE_BOOL", false);
+        assert!(result.unwrap());
+        unsafe { std::env::remove_var("IRONCLAW_TEST_PARSE_BOOL") };
+    }
+
+    // ==================== TunnelConfig validation tests ====================
+
+    #[test]
+    fn test_tunnel_config_https_validation() {
+        let config = TunnelConfig {
+            public_url: Some("https://example.com".to_string()),
+        };
+        assert!(config.public_url.as_ref().unwrap().starts_with("https://"));
+    }
+
+    #[test]
+    fn test_tunnel_config_none() {
+        let config = TunnelConfig { public_url: None };
+        assert!(config.public_url.is_none());
+    }
+
+    // ==================== default path helpers ====================
+
+    #[test]
+    fn test_default_libsql_path() {
+        let path = default_libsql_path();
+        assert!(path.to_str().unwrap().contains("ironclaw"));
+        assert!(path.to_str().unwrap().ends_with("ironclaw.db"));
+    }
+
+    #[test]
+    fn test_default_tools_dir() {
+        let path = default_tools_dir();
+        assert!(path.to_str().unwrap().contains("ironclaw"));
+        assert!(path.to_str().unwrap().ends_with("tools"));
+    }
+
+    #[test]
+    fn test_default_channels_dir() {
+        let path = default_channels_dir();
+        assert!(path.to_str().unwrap().contains("ironclaw"));
+        assert!(path.to_str().unwrap().ends_with("channels"));
+    }
+
+    #[test]
+    fn test_default_claude_code_allowed_tools() {
+        let tools = default_claude_code_allowed_tools();
+        assert!(!tools.is_empty());
+        assert!(tools.contains(&"Read".to_string()));
+        assert!(tools.contains(&"Glob".to_string()));
+        assert!(tools.contains(&"Grep".to_string()));
+    }
+}
