@@ -76,6 +76,13 @@ impl ModelDiscovery {
                 let url = base_url.unwrap_or("http://localhost:11434");
                 self.discover_ollama(url).await
             }
+            "openrouter" => {
+                let key = api_key.ok_or_else(|| LlmError::AuthFailed {
+                    provider: "openrouter".to_string(),
+                })?;
+                let url = base_url.unwrap_or("https://openrouter.ai/api/v1");
+                self.discover_openrouter(key, url).await
+            }
             other => Err(LlmError::RequestFailed {
                 provider: other.to_string(),
                 reason: format!("Unknown provider for discovery: {other}"),
@@ -231,6 +238,57 @@ impl ModelDiscovery {
         Ok(models)
     }
 
+    /// Discover available models from OpenRouter.
+    ///
+    /// Calls the `GET /models` endpoint on the OpenRouter API.
+    pub async fn discover_openrouter(
+        &self,
+        api_key: &str,
+        base_url: &str,
+    ) -> Result<Vec<DiscoveredModel>, LlmError> {
+        let url = format!("{}/models", base_url.trim_end_matches('/'));
+
+        let resp = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {api_key}"))
+            .send()
+            .await
+            .map_err(|e| LlmError::RequestFailed {
+                provider: "openrouter".to_string(),
+                reason: e.to_string(),
+            })?;
+
+        if !resp.status().is_success() {
+            return Err(LlmError::RequestFailed {
+                provider: "openrouter".to_string(),
+                reason: format!("HTTP {}", resp.status()),
+            });
+        }
+
+        let body: OpenRouterModelsResponse =
+            resp.json().await.map_err(|e| LlmError::InvalidResponse {
+                provider: "openrouter".to_string(),
+                reason: e.to_string(),
+            })?;
+
+        let models = body
+            .data
+            .into_iter()
+            .map(|m| DiscoveredModel {
+                id: m.id.clone(),
+                name: m.name.unwrap_or_else(|| m.id.clone()),
+                provider: "openrouter".to_string(),
+                context_length: m.context_length.unwrap_or(4_096),
+                supports_tools: true,   // Most OpenRouter models support tools
+                supports_vision: false, // Conservative default
+                is_available: true,
+            })
+            .collect();
+
+        Ok(models)
+    }
+
     /// Discover models from all known providers.
     ///
     /// Queries each provider that has credentials supplied. Errors from
@@ -316,6 +374,20 @@ struct OllamaTagsResponse {
 #[derive(Debug, Deserialize)]
 struct OllamaModel {
     name: String,
+    #[serde(default)]
+    context_length: Option<u64>,
+}
+
+/// OpenRouter `/models` response.
+#[derive(Debug, Deserialize)]
+struct OpenRouterModelsResponse {
+    data: Vec<OpenRouterModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenRouterModel {
+    id: String,
+    name: Option<String>,
     #[serde(default)]
     context_length: Option<u64>,
 }
