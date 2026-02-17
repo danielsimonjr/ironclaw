@@ -16,6 +16,7 @@ pub mod failover;
 pub mod gemini;
 mod nearai;
 mod nearai_chat;
+pub mod openrouter;
 mod provider;
 mod reasoning;
 mod rig_adapter;
@@ -28,6 +29,7 @@ pub use failover::FailoverProvider;
 pub use gemini::{GeminiConfig, GeminiProvider};
 pub use nearai::{ModelInfo, NearAiProvider};
 pub use nearai_chat::NearAiChatProvider;
+pub use openrouter::OpenRouterProvider;
 pub use provider::{
     ChatMessage, CompletionRequest, CompletionResponse, FinishReason, LlmProvider, ModelMetadata,
     Role, ToolCall, ToolCompletionRequest, ToolCompletionResponse, ToolDefinition, ToolResult,
@@ -65,6 +67,7 @@ pub fn create_llm_provider(
         LlmBackend::OpenAiCompatible => create_openai_compatible_provider(config),
         LlmBackend::Gemini => create_gemini_provider(config),
         LlmBackend::Bedrock => create_bedrock_provider(config),
+        LlmBackend::OpenRouter => create_openrouter_provider(config),
     }
 }
 
@@ -224,4 +227,16 @@ fn create_bedrock_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvider>, L
         bedrock_cfg.model_id
     );
     Ok(Arc::new(BedrockProvider::new(provider_config)))
+}
+
+fn create_openrouter_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvider>, LlmError> {
+    let or_cfg = config
+        .openrouter
+        .as_ref()
+        .ok_or_else(|| LlmError::AuthFailed {
+            provider: "openrouter".to_string(),
+        })?;
+
+    tracing::info!("Using OpenRouter (model: {})", or_cfg.model);
+    Ok(Arc::new(OpenRouterProvider::new(or_cfg.clone())?))
 }

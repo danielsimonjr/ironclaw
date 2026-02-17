@@ -567,6 +567,7 @@ impl SetupWizard {
             "Anthropic (requires API key)",
             "Ollama (local models, no account needed)",
             "OpenAI-compatible endpoint (vLLM, LiteLLM, Together, etc.)",
+            "OpenRouter (unified API for 200+ models, requires API key)",
         ];
 
         let choice = select_one("Select LLM provider:", &options).map_err(SetupError::Io)?;
@@ -601,6 +602,12 @@ impl SetupWizard {
                 self.settings.llm_backend = Some("openai_compatible".to_string());
                 self.setup_openai_compatible()?;
                 print_success("OpenAI-compatible endpoint configured");
+            }
+            5 => {
+                // OpenRouter
+                self.settings.llm_backend = Some("openrouter".to_string());
+                self.setup_api_key_provider("OpenRouter", "OPENROUTER_API_KEY")?;
+                print_success("OpenRouter configured");
             }
             _ => unreachable!(),
         }
@@ -754,6 +761,21 @@ impl SetupWizard {
                 ("gemma2", "Gemma 2"),
             ],
             "openai_compatible" | "openai-compatible" => vec![("default", "Default model")],
+            "openrouter" | "open_router" => vec![
+                ("openai/gpt-4o", "GPT-4o via OpenRouter (recommended)"),
+                (
+                    "anthropic/claude-sonnet-4-20250514",
+                    "Claude Sonnet 4 via OpenRouter",
+                ),
+                (
+                    "google/gemini-2.0-flash-001",
+                    "Gemini 2.0 Flash via OpenRouter",
+                ),
+                (
+                    "meta-llama/llama-4-maverick",
+                    "Llama 4 Maverick via OpenRouter",
+                ),
+            ],
             _ => {
                 // NEAR AI: try to fetch available models
                 let models = if let Some(ref session) = self.session_manager {
@@ -850,6 +872,7 @@ impl SetupWizard {
             openai_compatible: None,
             gemini: None,
             bedrock: None,
+            openrouter: None,
         };
 
         match create_llm_provider(&config, Arc::clone(session)) {

@@ -278,6 +278,8 @@ pub enum LlmBackend {
     Gemini,
     /// AWS Bedrock
     Bedrock,
+    /// OpenRouter (unified API gateway for multiple providers)
+    OpenRouter,
 }
 
 impl std::str::FromStr for LlmBackend {
@@ -292,8 +294,9 @@ impl std::str::FromStr for LlmBackend {
             "openai_compatible" | "openai-compatible" | "compatible" => Ok(Self::OpenAiCompatible),
             "gemini" | "google" | "google_gemini" => Ok(Self::Gemini),
             "bedrock" | "aws_bedrock" | "aws" => Ok(Self::Bedrock),
+            "openrouter" | "open_router" => Ok(Self::OpenRouter),
             _ => Err(format!(
-                "invalid LLM backend '{}', expected one of: nearai, openai, anthropic, ollama, openai_compatible, gemini, bedrock",
+                "invalid LLM backend '{}', expected one of: nearai, openai, anthropic, ollama, openai_compatible, gemini, bedrock, openrouter",
                 s
             )),
         }
@@ -310,6 +313,7 @@ impl std::fmt::Display for LlmBackend {
             Self::OpenAiCompatible => write!(f, "openai_compatible"),
             Self::Gemini => write!(f, "gemini"),
             Self::Bedrock => write!(f, "bedrock"),
+            Self::OpenRouter => write!(f, "openrouter"),
         }
     }
 }
@@ -360,10 +364,21 @@ pub struct BedrockDirectConfig {
     pub model_id: String,
 }
 
+/// Configuration for OpenRouter API access.
+#[derive(Debug, Clone)]
+pub struct OpenRouterConfig {
+    pub api_key: SecretString,
+    pub model: String,
+    /// Base URL (default: https://openrouter.ai/api/v1).
+    pub base_url: String,
+    /// Optional HTTP-Referer header for OpenRouter analytics.
+    pub referer: Option<String>,
+}
+
 /// LLM provider configuration.
 ///
 /// NEAR AI remains the default backend. Users can switch to other providers
-/// by setting `LLM_BACKEND` (e.g. `openai`, `anthropic`, `ollama`, `gemini`, `bedrock`).
+/// by setting `LLM_BACKEND` (e.g. `openai`, `anthropic`, `ollama`, `gemini`, `bedrock`, `openrouter`).
 #[derive(Debug, Clone)]
 pub struct LlmConfig {
     /// Which backend to use (default: NearAi)
@@ -382,6 +397,8 @@ pub struct LlmConfig {
     pub gemini: Option<GeminiDirectConfig>,
     /// AWS Bedrock config (populated when backend=bedrock)
     pub bedrock: Option<BedrockDirectConfig>,
+    /// OpenRouter config (populated when backend=openrouter)
+    pub openrouter: Option<OpenRouterConfig>,
 }
 
 /// API mode for NEAR AI.
@@ -573,6 +590,28 @@ impl LlmConfig {
             None
         };
 
+        let openrouter = if backend == LlmBackend::OpenRouter {
+            let api_key = optional_env("OPENROUTER_API_KEY")?
+                .map(SecretString::from)
+                .ok_or_else(|| ConfigError::MissingRequired {
+                    key: "OPENROUTER_API_KEY".to_string(),
+                    hint: "Set OPENROUTER_API_KEY when LLM_BACKEND=openrouter".to_string(),
+                })?;
+            let model =
+                optional_env("OPENROUTER_MODEL")?.unwrap_or_else(|| "openai/gpt-4o".to_string());
+            let base_url = optional_env("OPENROUTER_BASE_URL")?
+                .unwrap_or_else(|| "https://openrouter.ai/api/v1".to_string());
+            let referer = optional_env("OPENROUTER_REFERER")?;
+            Some(OpenRouterConfig {
+                api_key,
+                model,
+                base_url,
+                referer,
+            })
+        } else {
+            None
+        };
+
         Ok(Self {
             backend,
             nearai,
@@ -582,6 +621,7 @@ impl LlmConfig {
             openai_compatible,
             gemini,
             bedrock,
+            openrouter,
         })
     }
 }
