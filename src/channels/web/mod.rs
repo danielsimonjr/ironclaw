@@ -68,7 +68,9 @@ impl GatewayChannel {
     pub fn new(config: GatewayConfig) -> Self {
         let auth_token = config.auth_token.clone().unwrap_or_else(|| {
             use rand::Rng;
-            let token: String = rand::thread_rng()
+            use rand::rngs::OsRng;
+            // A-4: Use OsRng for security-critical token generation
+            let token: String = OsRng
                 .sample_iter(&rand::distributions::Alphanumeric)
                 .take(32)
                 .map(char::from)

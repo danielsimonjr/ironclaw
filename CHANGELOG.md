@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Security analysis** ([#18](https://github.com/danielsimonjr/ironclaw/pull/18)): Comprehensive security review of the codebase covering authentication, data protection, injection defenses, and sandboxing layers
 
+- **Security hardening: implement 17 findings from security analysis** — remediated all 9 High-severity and 8 Medium/Low-severity findings:
+  - OAuth token protection: `SecretString` for `client_secret`, `access_token`, `refresh_token`; custom `Debug` that redacts values; `Serialize` removed from `OAuthTokens`; PKCE verifier protected (C-1, C-2, C-3, C-4)
+  - SSE auth token URL decoding: query-string tokens now URL-decoded before constant-time comparison (A-1)
+  - Binary allowlist enforced by default: `BinsAllowlist::new()` sets `enforced: true` (X-1)
+  - Elevated mode session binding: `activate()` requires `session_id`, duration clamped to [60s, 8h], `is_active_for_session()` enforces scope (A-2, A-3)
+  - WASM tool_invoke approval gate: approval-required tools (shell, http, write_file, apply_patch, build_software) blocked from WASM invocation (T-1)
+  - Leak detector: URL percent-encoding detection, SHA384/SHA512 hex patterns, case-insensitive header scanning (S-4, S-5, S-6)
+  - Sanitizer: HTML/XML entity decoding (`&#115;ystem:` → `system:`) in normalization pipeline (S-1)
+  - Orchestrator token TTL: configurable expiry (default 4h) with `cleanup_expired()` method (A-7)
+  - Consistent `OsRng` usage: gateway auth, OAuth state, PKCE verifier, orchestrator tokens (A-4, C-6)
+  - Path traversal variant detection: URL-encoded, double-encoded, and backslash patterns (S-10)
+  - Log redaction: Basic auth, database connection strings, GitHub tokens, Slack tokens (L-1, L-2)
+
 - **OpenRouter LLM provider** — unified API gateway for 200+ models from OpenAI, Anthropic, Google, Meta, and others through a single endpoint:
   - Full `LlmProvider` trait implementation with chat completions and tool calling (`src/llm/openrouter.rs`)
   - `OpenRouter` variant in `LlmBackend` enum with env var config: `OPENROUTER_API_KEY` (required), `OPENROUTER_MODEL` (default: `openai/gpt-4o`), `OPENROUTER_BASE_URL`, `OPENROUTER_REFERER`

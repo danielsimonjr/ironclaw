@@ -141,6 +141,16 @@ impl Default for Policy {
             PolicyAction::Block,
         ));
 
+        // S-10: Detect path traversal variants including URL-encoded,
+        // double-encoded, and backslash variants.
+        policy.add_rule(PolicyRule::new(
+            "path_traversal",
+            "Path traversal attempt detected",
+            r"(?i)(\.\.[\\/]|%2e%2e[/\\%]|%252e%252e|\.%2e[/\\]|%2e\.[/\\]|\.\.%2f|\.\.%5c)",
+            Severity::Critical,
+            PolicyAction::Block,
+        ));
+
         // Block cryptocurrency private key patterns
         policy.add_rule(PolicyRule::new(
             "crypto_private_key",
@@ -238,5 +248,18 @@ mod tests {
         assert!(Severity::Critical > Severity::High);
         assert!(Severity::High > Severity::Medium);
         assert!(Severity::Medium > Severity::Low);
+    }
+
+    #[test]
+    fn test_path_traversal_variants() {
+        let policy = Policy::default();
+        // S-10: Standard traversal
+        assert!(policy.is_blocked("../../../etc/passwd"));
+        // URL-encoded
+        assert!(policy.is_blocked("%2e%2e/etc/passwd"));
+        // Double-encoded
+        assert!(policy.is_blocked("%252e%252e/secret"));
+        // Backslash variant
+        assert!(policy.is_blocked("..\\windows\\system32"));
     }
 }

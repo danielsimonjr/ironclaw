@@ -168,13 +168,15 @@ Three pluggable WASM channels: `slack`, `telegram`, `whatsapp`. Each implements 
 
 All external tool output passes through `SafetyLayer` (sanitizer → validator → policy) before reaching the LLM. Tool outputs are XML-wrapped with sanitization markers. Additional safety systems:
 
-- **LeakDetector**: Scans for secret exfiltration in requests and responses
-- **LogRedactor**: Regex-based redaction of API keys, Bearer tokens, JWTs, AWS keys, emails, passwords in log output
+- **Sanitizer**: Injection pattern detection with HTML entity decoding, invisible character stripping, homoglyph normalization
+- **LeakDetector**: Scans for secret exfiltration in requests and responses; URL percent-encoding detection; SHA256/384/512 hex patterns; case-insensitive header scanning
+- **LogRedactor**: Regex-based redaction of API keys, Bearer tokens, JWTs, AWS keys, emails, passwords in URLs, Basic auth, database connection strings, GitHub/Slack tokens
+- **Policy**: System file access blocking, shell/SQL injection detection, path traversal variant detection (URL-encoded, double-encoded, backslash)
 - **GroupPolicyManager**: Per-group tool allow/deny/require-approval policies
-- **ElevatedMode**: Time-limited privileged execution with audit tracking
-- **BinsAllowlist**: Curated POSIX utility allowlist with LD_PRELOAD/DYLD environment variable validation
+- **ElevatedMode**: Session-bound privileged execution with duration clamping [60s, 8h] and audit tracking
+- **BinsAllowlist**: Curated POSIX utility allowlist, enforced by default, with LD_PRELOAD/DYLD environment variable validation
 - **AccessControlList**: Allowlist/blocklist ACLs with glob matching
-- **OAuthFlowManager**: OAuth 2.0/2.1 with PKCE S256 support
+- **OAuthFlowManager**: OAuth 2.0/2.1 with PKCE S256 support; `SecretString` for all tokens/secrets; `OsRng` for all security-critical random values
 - **VulnerabilityScanner**: Regex-based skill vulnerability scanning with severity levels
 
 ### Workspace & Memory
@@ -389,7 +391,7 @@ Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-a
 
 ### Test Coverage
 
-~1,200 unit tests across ~190 tested files (out of 247 total `.rs` files), plus 53 integration tests. Key coverage areas:
+~1,840 unit tests across ~190 tested files (out of 247 total `.rs` files), plus 53 integration tests. Key coverage areas:
 
 | Module | Coverage | Notes |
 |--------|----------|-------|

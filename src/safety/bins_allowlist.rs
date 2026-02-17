@@ -84,7 +84,7 @@ impl BinsAllowlist {
 
         Self {
             allowed,
-            enforced: false, // Off by default, can be enabled
+            enforced: true, // Enforced by default for security (X-1)
         }
     }
 
@@ -217,10 +217,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_allows_common_binaries() {
-        let mut list = BinsAllowlist::new();
-        list.set_enforced(true);
+    fn test_enforced_by_default() {
+        let list = BinsAllowlist::new();
+        // X-1: enforced by default
+        assert!(list.is_enforced());
+    }
 
+    #[test]
+    fn test_default_allows_common_binaries() {
+        let list = BinsAllowlist::new();
+        // Now enforced by default (X-1)
         assert!(list.is_allowed("ls"));
         assert!(list.is_allowed("git"));
         assert!(list.is_allowed("cargo"));
@@ -229,23 +235,22 @@ mod tests {
 
     #[test]
     fn test_blocks_unknown_when_enforced() {
-        let mut list = BinsAllowlist::new();
-        list.set_enforced(true);
-
+        let list = BinsAllowlist::new();
+        // Now enforced by default (X-1)
         assert!(!list.is_allowed("malicious_binary"));
     }
 
     #[test]
     fn test_allows_everything_when_not_enforced() {
-        let list = BinsAllowlist::new();
+        let mut list = BinsAllowlist::new();
+        list.set_enforced(false);
         assert!(list.is_allowed("anything"));
     }
 
     #[test]
     fn test_validate_command() {
-        let mut list = BinsAllowlist::new();
-        list.set_enforced(true);
-
+        let list = BinsAllowlist::new();
+        // Now enforced by default (X-1)
         assert!(list.validate_command("ls -la").is_ok());
         assert!(list.validate_command("git status").is_ok());
         assert!(list.validate_command("evil_binary --flag").is_err());
@@ -253,9 +258,8 @@ mod tests {
 
     #[test]
     fn test_validate_sudo_command() {
-        let mut list = BinsAllowlist::new();
-        list.set_enforced(true);
-
+        let list = BinsAllowlist::new();
+        // Now enforced by default (X-1)
         assert!(list.validate_command("sudo ls -la").is_ok());
         assert!(list.validate_command("sudo evil_binary").is_err());
     }
@@ -263,8 +267,7 @@ mod tests {
     #[test]
     fn test_add_remove() {
         let mut list = BinsAllowlist::new();
-        list.set_enforced(true);
-
+        // Now enforced by default (X-1)
         list.allow("custom_tool");
         assert!(list.is_allowed("custom_tool"));
 
