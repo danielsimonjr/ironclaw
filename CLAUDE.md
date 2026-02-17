@@ -290,7 +290,7 @@ All errors use `thiserror` with a top-level `Error` enum in `src/error.rs` that 
 - **Async**: All I/O is async with tokio. `Arc<T>` for shared state, `RwLock` for concurrent read/write.
 - **Imports**: Use `crate::` paths, not `super::`. No `pub use` re-exports unless exposing to downstream consumers.
 - **Types**: Prefer strong types (enums, newtypes) over strings.
-- **Testing**: Tests live in `mod tests {}` blocks at the bottom of each file. Async tests use `#[tokio::test]`. No mocks — prefer real implementations or stubs.
+- **Testing**: Tests live in `mod tests {}` blocks at the bottom of each file. Async tests use `#[tokio::test]`. No mocks — prefer real implementations or stubs. Feature-gated tests use `#[cfg(all(test, feature = "postgres"))]` or `#[cfg(test)]` for feature-independent tests. Environment variable tests in Rust 2024 require `unsafe` blocks for `std::env::set_var`/`remove_var`.
 - **Architecture**: Prefer generic/extensible designs over hardcoded integrations. Ask clarifying questions about abstraction level before implementing.
 - **Rust edition**: 2024 with MSRV 1.92.
 
@@ -386,6 +386,24 @@ Config loads with priority: environment variables > database settings > defaults
 - **windows-installer.yml** — Uploads PowerShell installer script (`ironclaw-installer.ps1`) to GitHub Releases on publish
 
 Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`.
+
+### Test Coverage
+
+~1,200 unit tests across ~190 tested files (out of 247 total `.rs` files), plus 53 integration tests. Key coverage areas:
+
+| Module | Coverage | Notes |
+|--------|----------|-------|
+| `safety` | 100% files | Leak detection, redaction, policies |
+| `agent` | 95% files | Command queue, session mgmt, routing |
+| `channels` | 78% files | WASM routing, web gateway, inline commands |
+| `tools` | 71% files | Browser, MCP client, WASM hosting, memory tools identity protection |
+| `config` | Tested | Enum parsing, validation, env var helpers |
+| `db` | Partial | libSQL type conversion helpers, pure functions |
+| `context` | Tested | Full state machine matrix, transition validation |
+| `estimation` | Tested | EMA correctness, zero-estimate guards, confidence |
+| `workspace` | Tested | RRF algorithm, search config, normalization |
+
+See `TEST_COVERAGE_ANALYSIS.md` for the full analysis and remaining gaps.
 
 ### Windows Installer
 

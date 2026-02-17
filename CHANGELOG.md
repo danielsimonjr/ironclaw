@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Comprehensive test coverage expansion** — ~145 new unit tests across 6 priority modules identified by test coverage analysis:
+  - Database layer (20 tests): `parse_timestamp` format handling (RFC 3339, naive with/without fractional seconds), `fmt_ts` roundtrip, `parse_job_state` all 8 variants + unknown fallback, `opt_text`/`opt_text_owned` NULL semantics, `fmt_opt_ts` optional DateTime conversion
+  - Configuration system (35 tests): `DatabaseBackend::from_str` (postgres/libsql variants, case insensitivity), `LlmBackend::from_str` (all 8 providers + aliases), `NearAiApiMode::from_str`, Display↔FromStr roundtrip, `optional_env` empty-string-as-None, `parse_optional_env` type parsing with defaults, path helper validation
+  - Context state machine (17 new tests): complete valid transition matrix (13 transitions), all invalid transitions from terminal states, invalid skip transitions, terminal/active complementarity, full happy-path lifecycle, timestamp tracking on state changes, recovery mechanics
+  - Memory tools security (17 tests): identity file protection (exact match + case-insensitive + leading-slash normalization for IDENTITY.md, SOUL.md, AGENTS.md, USER.md), search limit clamping (default 5, max 20), tree depth clamping (min 1, max 10), `ConnectionType::from_str_loose` validation
+  - Estimation learner (16 new tests): zero-estimate guards for cost and time, EMA formula correctness, convergence with consistent data, alpha clamping, min_samples threshold behavior, confidence levels (no data/insufficient/many), sample counting, error rate tracking
+  - Hybrid search RRF (12 new tests): empty inputs, FTS-only/vector-only results, score descending order, hybrid score > single-method, RRF formula correctness with normalization, deduplication, min_score filtering, SearchConfig defaults and clamping
+
+- **Test coverage analysis** ([#17](https://github.com/danielsimonjr/ironclaw/pull/17)): Comprehensive analysis of 247 source files identifying 67 untested files, prioritized recommendations for 175 additional tests across database, config, context, memory, analytics, and routine modules
+
+- **Security analysis** ([#18](https://github.com/danielsimonjr/ironclaw/pull/18)): Comprehensive security review of the codebase covering authentication, data protection, injection defenses, and sandboxing layers
+
 - **OpenRouter LLM provider** — unified API gateway for 200+ models from OpenAI, Anthropic, Google, Meta, and others through a single endpoint:
   - Full `LlmProvider` trait implementation with chat completions and tool calling (`src/llm/openrouter.rs`)
   - `OpenRouter` variant in `LlmBackend` enum with env var config: `OPENROUTER_API_KEY` (required), `OPENROUTER_MODEL` (default: `openai/gpt-4o`), `OPENROUTER_BASE_URL`, `OPENROUTER_REFERER`

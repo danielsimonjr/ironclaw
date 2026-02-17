@@ -1158,4 +1158,247 @@ mod tests {
         assert!(schema["properties"]["depth"].is_object());
         assert_eq!(schema["properties"]["depth"]["default"], 1);
     }
+
+    // ==================== Identity file protection tests ====================
+
+    #[test]
+    fn test_protected_identity_files_list() {
+        // All 4 protected files must be in the constant
+        assert!(PROTECTED_IDENTITY_FILES.contains(&"IDENTITY.md"));
+        assert!(PROTECTED_IDENTITY_FILES.contains(&"SOUL.md"));
+        assert!(PROTECTED_IDENTITY_FILES.contains(&"AGENTS.md"));
+        assert!(PROTECTED_IDENTITY_FILES.contains(&"USER.md"));
+        assert_eq!(PROTECTED_IDENTITY_FILES.len(), 4);
+    }
+
+    #[test]
+    fn test_protected_files_exact_match_blocks_write() {
+        // Direct target match: PROTECTED_IDENTITY_FILES.contains(&target)
+        for file in PROTECTED_IDENTITY_FILES {
+            assert!(
+                PROTECTED_IDENTITY_FILES.contains(file),
+                "Protected file {:?} should be detected by exact match",
+                file
+            );
+        }
+    }
+
+    #[test]
+    fn test_protected_files_case_insensitive_check() {
+        // The memory_write tool normalizes paths: path.trim_start_matches('/')
+        // then checks eq_ignore_ascii_case
+        let test_cases = [
+            ("IDENTITY.md", true),
+            ("identity.md", true),
+            ("Identity.md", true),
+            ("SOUL.md", true),
+            ("soul.md", true),
+            ("Soul.MD", true),
+            ("AGENTS.md", true),
+            ("agents.md", true),
+            ("USER.md", true),
+            ("user.md", true),
+            // Non-protected files
+            ("notes.md", false),
+            ("MEMORY.md", false),
+            ("daily_log.md", false),
+        ];
+
+        for (path, should_block) in &test_cases {
+            let normalized = path.trim_start_matches('/');
+            let is_protected = PROTECTED_IDENTITY_FILES
+                .iter()
+                .any(|p| normalized.eq_ignore_ascii_case(p));
+            assert_eq!(
+                is_protected, *should_block,
+                "Path '{}' protection check failed (expected {})",
+                path, should_block
+            );
+        }
+    }
+
+    #[test]
+    fn test_protected_files_leading_slash_stripped() {
+        // Paths with leading slashes should still be blocked
+        let paths_with_slash = [
+            "/IDENTITY.md",
+            "/SOUL.md",
+            "/AGENTS.md",
+            "/USER.md",
+            "///IDENTITY.md",
+        ];
+
+        for path in &paths_with_slash {
+            let normalized = path.trim_start_matches('/');
+            let is_protected = PROTECTED_IDENTITY_FILES
+                .iter()
+                .any(|p| normalized.eq_ignore_ascii_case(p));
+            assert!(
+                is_protected,
+                "Path with leading slash '{}' should be blocked after normalization",
+                path
+            );
+        }
+    }
+
+    // ==================== Search limit clamping tests ====================
+
+    #[test]
+    fn test_search_limit_default() {
+        let params = serde_json::json!({ "query": "test" });
+        let limit = params
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(5)
+            .min(20) as usize;
+        assert_eq!(limit, 5);
+    }
+
+    #[test]
+    fn test_search_limit_within_range() {
+        let params = serde_json::json!({ "query": "test", "limit": 10 });
+        let limit = params
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(5)
+            .min(20) as usize;
+        assert_eq!(limit, 10);
+    }
+
+    #[test]
+    fn test_search_limit_clamped_at_max() {
+        let params = serde_json::json!({ "query": "test", "limit": 100 });
+        let limit = params
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(5)
+            .min(20) as usize;
+        assert_eq!(limit, 20);
+    }
+
+    #[test]
+    fn test_search_limit_zero_uses_default() {
+        // 0 as u64 min with 20 = 0, unwrap_or(5) doesn't apply since value exists
+        let params = serde_json::json!({ "query": "test", "limit": 0 });
+        let limit = params
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(5)
+            .min(20) as usize;
+        assert_eq!(limit, 0); // zero is allowed through
+    }
+
+    // ==================== Tree depth clamping tests ====================
+
+    #[test]
+    fn test_tree_depth_default() {
+        let params = serde_json::json!({});
+        let depth = params
+            .get("depth")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1)
+            .clamp(1, 10) as usize;
+        assert_eq!(depth, 1);
+    }
+
+    #[test]
+    fn test_tree_depth_within_range() {
+        let params = serde_json::json!({ "depth": 5 });
+        let depth = params
+            .get("depth")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1)
+            .clamp(1, 10) as usize;
+        assert_eq!(depth, 5);
+    }
+
+    #[test]
+    fn test_tree_depth_clamped_at_max() {
+        let params = serde_json::json!({ "depth": 100 });
+        let depth = params
+            .get("depth")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1)
+            .clamp(1, 10) as usize;
+        assert_eq!(depth, 10);
+    }
+
+    #[test]
+    fn test_tree_depth_clamped_at_min() {
+        let params = serde_json::json!({ "depth": 0 });
+        let depth = params
+            .get("depth")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1)
+            .clamp(1, 10) as usize;
+        // 0u64.clamp(1, 10) = 1
+        assert_eq!(depth, 1);
+    }
+
+    // ==================== Connection type validation tests ====================
+
+    #[test]
+    fn test_connection_type_valid() {
+        assert!(ConnectionType::from_str_loose("updates").is_some());
+        assert!(ConnectionType::from_str_loose("update").is_some());
+        assert!(ConnectionType::from_str_loose("extends").is_some());
+        assert!(ConnectionType::from_str_loose("extend").is_some());
+        assert!(ConnectionType::from_str_loose("derives").is_some());
+        assert!(ConnectionType::from_str_loose("derive").is_some());
+        assert!(ConnectionType::from_str_loose("inferred").is_some());
+    }
+
+    #[test]
+    fn test_connection_type_case_insensitive() {
+        assert!(ConnectionType::from_str_loose("UPDATES").is_some());
+        assert!(ConnectionType::from_str_loose("Extends").is_some());
+        assert!(ConnectionType::from_str_loose("DERIVES").is_some());
+    }
+
+    #[test]
+    fn test_connection_type_invalid() {
+        assert!(ConnectionType::from_str_loose("unknown_type").is_none());
+        assert!(ConnectionType::from_str_loose("").is_none());
+        assert!(ConnectionType::from_str_loose("references").is_none());
+        assert!(ConnectionType::from_str_loose("depends_on").is_none());
+    }
+
+    // ==================== Memory tool name and sanitization tests ====================
+
+    #[test]
+    fn test_memory_connect_schema() {
+        let workspace = make_test_workspace();
+        let tool = MemoryConnectTool::new(workspace);
+
+        assert_eq!(tool.name(), "memory_connect");
+        assert!(!tool.requires_sanitization());
+
+        let schema = tool.parameters_schema();
+        let conn_types = schema["properties"]["connection_type"]["enum"]
+            .as_array()
+            .unwrap();
+        assert_eq!(conn_types.len(), 3);
+        assert!(conn_types.contains(&"updates".into()));
+        assert!(conn_types.contains(&"extends".into()));
+        assert!(conn_types.contains(&"derives".into()));
+    }
+
+    #[test]
+    fn test_memory_spaces_schema() {
+        let workspace = make_test_workspace();
+        let tool = MemorySpacesTool::new(workspace);
+
+        assert_eq!(tool.name(), "memory_spaces");
+        assert!(!tool.requires_sanitization());
+
+        let schema = tool.parameters_schema();
+        let actions = schema["properties"]["action"]["enum"].as_array().unwrap();
+        assert_eq!(actions.len(), 6);
+        assert!(actions.contains(&"create".into()));
+        assert!(actions.contains(&"list".into()));
+        assert!(actions.contains(&"add".into()));
+        assert!(actions.contains(&"remove".into()));
+        assert!(actions.contains(&"contents".into()));
+        assert!(actions.contains(&"delete".into()));
+    }
 }

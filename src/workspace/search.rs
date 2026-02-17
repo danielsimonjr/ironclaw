@@ -388,4 +388,220 @@ mod tests {
         assert!(!vector_only.use_fts);
         assert!(vector_only.use_vector);
     }
+
+    // ==================== Additional RRF tests ====================
+
+    #[test]
+    fn test_rrf_empty_inputs() {
+        let config = SearchConfig::default().with_limit(10);
+        let results = reciprocal_rank_fusion(Vec::new(), Vec::new(), &config);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_rrf_fts_only_results() {
+        let config = SearchConfig::default().with_limit(10);
+        let doc = Uuid::new_v4();
+        let chunk = Uuid::new_v4();
+        let fts = vec![make_result(chunk, doc, 1)];
+
+        let results = reciprocal_rank_fusion(fts, Vec::new(), &config);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].fts_rank.is_some());
+        assert!(results[0].vector_rank.is_none());
+        assert!(results[0].from_fts());
+        assert!(!results[0].from_vector());
+        assert!(!results[0].is_hybrid());
+    }
+
+    #[test]
+    fn test_rrf_vector_only_results() {
+        let config = SearchConfig::default().with_limit(10);
+        let doc = Uuid::new_v4();
+        let chunk = Uuid::new_v4();
+        let vector = vec![make_result(chunk, doc, 1)];
+
+        let results = reciprocal_rank_fusion(Vec::new(), vector, &config);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].fts_rank.is_none());
+        assert!(results[0].vector_rank.is_some());
+        assert!(!results[0].from_fts());
+        assert!(results[0].from_vector());
+    }
+
+    #[test]
+    fn test_rrf_scores_descending() {
+        let config = SearchConfig::default().with_limit(10);
+        let doc = Uuid::new_v4();
+        let chunks: Vec<_> = (1..=5)
+            .map(|i| make_result(Uuid::new_v4(), doc, i))
+            .collect();
+
+        let results = reciprocal_rank_fusion(chunks, Vec::new(), &config);
+        for i in 0..results.len() - 1 {
+            assert!(
+                results[i].score >= results[i + 1].score,
+                "Results should be sorted descending by score"
+            );
+        }
+    }
+
+    #[test]
+    fn test_rrf_hybrid_score_higher_than_single() {
+        let config = SearchConfig::default().with_limit(10);
+        let doc = Uuid::new_v4();
+        let hybrid_chunk = Uuid::new_v4();
+        let fts_only_chunk = Uuid::new_v4();
+
+        let fts = vec![
+            make_result(hybrid_chunk, doc, 1),
+            make_result(fts_only_chunk, doc, 2),
+        ];
+        let vector = vec![make_result(hybrid_chunk, doc, 1)];
+
+        let results = reciprocal_rank_fusion(fts, vector, &config);
+
+        let hybrid = results.iter().find(|r| r.chunk_id == hybrid_chunk).unwrap();
+        let single = results
+            .iter()
+            .find(|r| r.chunk_id == fts_only_chunk)
+            .unwrap();
+
+        assert!(
+            hybrid.score > single.score,
+            "Hybrid match should score higher than single-method match"
+        );
+    }
+
+    #[test]
+    fn test_rrf_score_formula_correctness() {
+        let config = SearchConfig::default().with_limit(10);
+        let doc = Uuid::new_v4();
+        let chunk1 = Uuid::new_v4();
+        let chunk2 = Uuid::new_v4();
+
+        let fts = vec![make_result(chunk1, doc, 1), make_result(chunk2, doc, 2)];
+        let results = reciprocal_rank_fusion(fts, Vec::new(), &config);
+
+        // After normalization, chunk1 should be 1.0 (max score)
+        assert!(
+            (results[0].score - 1.0).abs() < 0.001,
+            "Top result should be normalized to 1.0"
+        );
+
+        // chunk2 normalized score = (1/(60+2)) / (1/(60+1)) = 61/62
+        let expected_ratio = 61.0_f32 / 62.0;
+        assert!(
+            (results[1].score - expected_ratio).abs() < 0.001,
+            "Second result should be ~{}, got {}",
+            expected_ratio,
+            results[1].score
+        );
+    }
+
+    #[test]
+    fn test_rrf_deduplication() {
+        let config = SearchConfig::default().with_limit(10);
+        let doc = Uuid::new_v4();
+        let chunk = Uuid::new_v4();
+
+        let fts = vec![make_result(chunk, doc, 1)];
+        let vector = vec![make_result(chunk, doc, 1)];
+
+        let results = reciprocal_rank_fusion(fts, vector, &config);
+        assert_eq!(results.len(), 1, "Duplicate chunks should be merged");
+        assert!(results[0].fts_rank.is_some());
+        assert!(results[0].vector_rank.is_some());
+        assert!(results[0].is_hybrid());
+    }
+
+    #[test]
+    fn test_rrf_min_score_zero_no_filter() {
+        let config = SearchConfig::default().with_limit(10).with_min_score(0.0);
+        let doc = Uuid::new_v4();
+        let fts: Vec<_> = (1..=5)
+            .map(|i| make_result(Uuid::new_v4(), doc, i))
+            .collect();
+
+        let results = reciprocal_rank_fusion(fts, Vec::new(), &config);
+        assert_eq!(
+            results.len(),
+            5,
+            "Zero min_score should not filter anything"
+        );
+    }
+
+    #[test]
+    fn test_rrf_high_min_score_filters_all() {
+        // min_score is clamped to [0, 1] by with_min_score, so use direct assignment
+        let mut config = SearchConfig::default().with_limit(10);
+        config.min_score = 2.0; // bypass clamping for this edge case test
+        let doc = Uuid::new_v4();
+        let fts = vec![make_result(Uuid::new_v4(), doc, 1)];
+
+        let results = reciprocal_rank_fusion(fts, Vec::new(), &config);
+        assert!(
+            results.is_empty(),
+            "min_score > max normalized score should filter everything"
+        );
+    }
+
+    #[test]
+    fn test_search_config_min_score_clamped() {
+        let config = SearchConfig::default().with_min_score(5.0);
+        assert!(
+            (config.min_score - 1.0).abs() < 0.001,
+            "min_score should be clamped to 1.0"
+        );
+
+        let config2 = SearchConfig::default().with_min_score(-1.0);
+        assert!(
+            (config2.min_score).abs() < 0.001,
+            "min_score should be clamped to 0.0"
+        );
+    }
+
+    #[test]
+    fn test_search_config_default_values() {
+        let config = SearchConfig::default();
+        assert_eq!(config.limit, 10);
+        assert_eq!(config.rrf_k, 60);
+        assert!(config.use_fts);
+        assert!(config.use_vector);
+        assert!((config.min_score).abs() < 0.001);
+        assert_eq!(config.pre_fusion_limit, 50);
+    }
+
+    #[test]
+    fn test_search_result_methods() {
+        let result = SearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: Uuid::new_v4(),
+            content: "test".to_string(),
+            score: 0.5,
+            fts_rank: Some(1),
+            vector_rank: Some(2),
+        };
+        assert!(result.from_fts());
+        assert!(result.from_vector());
+        assert!(result.is_hybrid());
+
+        let fts_only = SearchResult {
+            fts_rank: Some(1),
+            vector_rank: None,
+            ..result.clone()
+        };
+        assert!(fts_only.from_fts());
+        assert!(!fts_only.from_vector());
+        assert!(!fts_only.is_hybrid());
+
+        let vector_only = SearchResult {
+            fts_rank: None,
+            vector_rank: Some(1),
+            ..result
+        };
+        assert!(!vector_only.from_fts());
+        assert!(vector_only.from_vector());
+        assert!(!vector_only.is_hybrid());
+    }
 }
