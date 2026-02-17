@@ -198,6 +198,33 @@ fn default_patterns() -> Vec<RedactionPattern> {
             pattern: r"(?i)(?:secret|token|key|password)\s*[=:]\s*([a-fA-F0-9]{32,})".to_string(),
             replacement: "[REDACTED_HEX_SECRET]".to_string(),
         },
+        // 10. Base64-encoded credentials in Authorization headers (L-1)
+        // Matches "Basic <base64>" which can contain username:password
+        RedactionPattern {
+            name: "basic_auth".to_string(),
+            pattern: r"Basic\s+[A-Za-z0-9+/]{8,}={0,2}".to_string(),
+            replacement: "[REDACTED_BASIC_AUTH]".to_string(),
+        },
+        // 11. Database connection strings with embedded passwords (L-2)
+        // Covers postgres://, mysql://, mongodb://, redis://, amqp://
+        RedactionPattern {
+            name: "db_connection_string".to_string(),
+            pattern: r"(?i)(?:postgres|mysql|mongodb(?:\+srv)?|redis|amqp)://[^@\s]+@[^\s]+"
+                .to_string(),
+            replacement: "[REDACTED_CONNECTION_STRING]".to_string(),
+        },
+        // 12. GitHub personal access tokens (ghp_, gho_, ghs_, ghr_)
+        RedactionPattern {
+            name: "github_token".to_string(),
+            pattern: r"gh[posh]_[a-zA-Z0-9]{36,}".to_string(),
+            replacement: "[REDACTED_GITHUB_TOKEN]".to_string(),
+        },
+        // 13. Slack tokens (xoxb-, xoxp-, xapp-)
+        RedactionPattern {
+            name: "slack_token".to_string(),
+            pattern: r"xox[bpa]-[a-zA-Z0-9\-]{10,}".to_string(),
+            replacement: "[REDACTED_SLACK_TOKEN]".to_string(),
+        },
     ]
 }
 
@@ -326,17 +353,14 @@ mod tests {
         let redactor = LogRedactor::new();
         let input = "DATABASE_URL=postgres://admin:s3cretP@ss@db.example.com:5432/mydb";
         let result = redactor.redact(input);
+        // The connection string pattern (L-2) or password_in_url pattern
+        // should redact the password
         assert!(
-            result.contains("[REDACTED]"),
+            result.contains("[REDACTED"),
             "should redact password in URL, got: {}",
             result,
         );
         assert!(!result.contains("s3cretP@ss"), "password should not appear");
-        // The host should survive redaction
-        assert!(
-            result.contains("db.example.com") || result.contains("[REDACTED_EMAIL]"),
-            "host or redacted host should appear"
-        );
     }
 
     #[test]
@@ -344,9 +368,12 @@ mod tests {
         let redactor = LogRedactor::new();
         let input = "mysql://root:hunter2@localhost/app";
         let result = redactor.redact(input);
+        // The connection string pattern (L-2) or password_in_url pattern
+        // should redact the password
         assert!(
-            result.contains("[REDACTED]"),
-            "should redact MySQL password"
+            result.contains("[REDACTED"),
+            "should redact MySQL password, got: {}",
+            result,
         );
         assert!(!result.contains("hunter2"));
     }
@@ -617,6 +644,75 @@ mod tests {
         assert!(
             result.contains("[REDACTED_PRIVATE_KEY]"),
             "private key header should be redacted"
+        );
+    }
+
+    // ── L-1: Basic auth redaction ────────────────────────────────────
+
+    #[test]
+    fn test_redact_basic_auth() {
+        let redactor = LogRedactor::new();
+        let input = "Authorization: Basic dXNlcjpwYXNzd29yZA==";
+        let result = redactor.redact(input);
+        assert!(
+            result.contains("[REDACTED_BASIC_AUTH]"),
+            "Basic auth should be redacted (L-1), got: {}",
+            result,
+        );
+        assert!(!result.contains("dXNlcjpwYXNzd29yZA"));
+    }
+
+    // ── L-2: Database connection string redaction ────────────────────
+
+    #[test]
+    fn test_redact_postgres_connection_string() {
+        let redactor = LogRedactor::new();
+        let input = "Connecting to postgres://admin:secret@db.internal:5432/app";
+        let result = redactor.redact(input);
+        assert!(
+            result.contains("[REDACTED_CONNECTION_STRING]"),
+            "Postgres connection string should be redacted (L-2), got: {}",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_redact_mongodb_connection_string() {
+        let redactor = LogRedactor::new();
+        let input = "mongodb+srv://user:pass@cluster.abc.mongodb.net/db";
+        let result = redactor.redact(input);
+        assert!(
+            result.contains("[REDACTED_CONNECTION_STRING]"),
+            "MongoDB connection string should be redacted (L-2), got: {}",
+            result,
+        );
+    }
+
+    // ── GitHub/Slack token redaction ──────────────────────────────────
+
+    #[test]
+    fn test_redact_github_token() {
+        let redactor = LogRedactor::new();
+        let input = "GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+        let result = redactor.redact(input);
+        assert!(
+            result.contains("[REDACTED_GITHUB_TOKEN]"),
+            "GitHub token should be redacted, got: {}",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_redact_slack_token() {
+        let redactor = LogRedactor::new();
+        // Use a constructed test value to avoid triggering GitHub push protection
+        let prefix = "xoxb";
+        let input = format!("token: {}-1234567890-abcdefghijklmnop", prefix);
+        let result = redactor.redact(&input);
+        assert!(
+            result.contains("[REDACTED_SLACK_TOKEN]"),
+            "Slack token should be redacted, got: {}",
+            result,
         );
     }
 }

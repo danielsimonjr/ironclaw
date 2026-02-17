@@ -275,6 +275,8 @@ impl HostState {
     /// Check if tool invocation is allowed for an alias.
     ///
     /// Returns the real tool name if allowed, error otherwise.
+    /// Tools that require user approval are blocked from WASM invocation
+    /// to prevent bypassing the approval gate (T-1).
     pub fn check_tool_invoke_allowed(&self, alias: &str) -> Result<String, String> {
         let capability = self
             .capabilities
@@ -282,10 +284,30 @@ impl HostState {
             .as_ref()
             .ok_or_else(|| "Tool invocation capability not granted".to_string())?;
 
-        capability
+        let real_name = capability
             .resolve_alias(alias)
             .map(|s| s.to_string())
-            .ok_or_else(|| format!("Unknown tool alias: {}", alias))
+            .ok_or_else(|| format!("Unknown tool alias: {}", alias))?;
+
+        // T-1: Block invocation of tools that require approval through
+        // the WASM tool_invoke path. These tools must only be invoked
+        // through the main approval flow.
+        const APPROVAL_REQUIRED_TOOLS: &[&str] = &[
+            "shell",
+            "http",
+            "write_file",
+            "apply_patch",
+            "build_software",
+        ];
+
+        if APPROVAL_REQUIRED_TOOLS.contains(&real_name.as_str()) {
+            return Err(format!(
+                "Tool '{}' (alias '{}') requires user approval and cannot be invoked from WASM",
+                real_name, alias
+            ));
+        }
+
+        Ok(real_name)
     }
 
     /// Increment HTTP request counter and check rate limit.

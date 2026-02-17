@@ -8,22 +8,37 @@
 //!
 //! Supports Authorization Code with PKCE (RFC 7636), which is the
 //! recommended flow for native/CLI applications.
+//!
+//! # Security
+//!
+//! - `client_secret` is stored as `SecretString` and never serialized (C-1).
+//! - `OAuthTokens` uses `SecretString` for tokens with custom `Debug` that
+//!   redacts values. `Serialize` is deliberately **not** derived (C-2, C-3).
+//! - PKCE verifier stored as `SecretString` to protect during transmission (C-4).
+//! - All security-critical random values use `OsRng` (C-6).
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use rand::RngCore;
+use rand::rngs::OsRng;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 /// OAuth 2.0 client configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `client_secret` is stored as `SecretString` and excluded from serialization
+/// to prevent accidental exposure (C-1).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OAuthConfig {
     /// OAuth client ID.
     pub client_id: String,
     /// OAuth client secret (optional for public clients using PKCE).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_secret: Option<String>,
+    /// Stored as `SecretString` — never serialized.
+    #[serde(skip)]
+    pub client_secret: Option<SecretString>,
     /// Authorization endpoint URL.
     pub authorize_url: String,
     /// Token endpoint URL.
@@ -38,21 +53,47 @@ pub struct OAuthConfig {
     pub use_pkce: bool,
 }
 
+impl std::fmt::Debug for OAuthConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthConfig")
+            .field("client_id", &self.client_id)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("authorize_url", &self.authorize_url)
+            .field("token_url", &self.token_url)
+            .field("redirect_uri", &self.redirect_uri)
+            .field("scopes", &self.scopes)
+            .field("use_pkce", &self.use_pkce)
+            .finish()
+    }
+}
+
 fn default_true() -> bool {
     true
 }
 
 /// Token response from an OAuth provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Uses `SecretString` for `access_token` and `refresh_token` to prevent
+/// accidental exposure through Debug formatting or serialization (C-2, C-3).
+/// `Serialize` is **not** derived — tokens must never be auto-serialized.
+#[derive(Clone, Deserialize)]
 pub struct OAuthTokens {
-    /// Access token for API calls.
-    pub access_token: String,
+    /// Access token for API calls (protected).
+    #[serde(deserialize_with = "deserialize_secret_string")]
+    pub access_token: SecretString,
     /// Token type (usually "Bearer").
     #[serde(default = "default_bearer")]
     pub token_type: String,
-    /// Refresh token for getting new access tokens.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token: Option<String>,
+    /// Refresh token for getting new access tokens (protected).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_option_secret_string"
+    )]
+    pub refresh_token: Option<SecretString>,
     /// Time until the access token expires (in seconds).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_in: Option<u64>,
@@ -62,6 +103,40 @@ pub struct OAuthTokens {
     /// When this token set was obtained.
     #[serde(skip)]
     pub obtained_at: Option<Instant>,
+}
+
+/// Custom Debug that redacts token values (C-2).
+impl std::fmt::Debug for OAuthTokens {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthTokens")
+            .field("access_token", &"[REDACTED]")
+            .field("token_type", &self.token_type)
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("expires_in", &self.expires_in)
+            .field("scope", &self.scope)
+            .finish()
+    }
+}
+
+fn deserialize_secret_string<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(SecretString::from(s))
+}
+
+fn deserialize_option_secret_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<SecretString>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    Ok(opt.map(SecretString::from))
 }
 
 fn default_bearer() -> String {
@@ -84,30 +159,49 @@ impl OAuthTokens {
     pub fn can_refresh(&self) -> bool {
         self.refresh_token.is_some()
     }
+
+    /// Expose the access token value. Callers must ensure the returned
+    /// value is not logged or serialized.
+    pub fn expose_access_token(&self) -> &str {
+        self.access_token.expose_secret()
+    }
 }
 
 /// PKCE verifier and challenge pair (RFC 7636).
-#[derive(Debug, Clone)]
+///
+/// The verifier is stored as `SecretString` to protect it during
+/// storage and transmission (C-4).
+#[derive(Clone)]
 pub struct PkceChallenge {
-    /// The code verifier (random string sent with token request).
-    pub verifier: String,
+    /// The code verifier (random string sent with token request, protected).
+    pub verifier: SecretString,
     /// The code challenge (SHA256 hash of verifier, sent with auth request).
     pub challenge: String,
     /// Challenge method (always "S256").
     pub method: String,
 }
 
+impl std::fmt::Debug for PkceChallenge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PkceChallenge")
+            .field("verifier", &"[REDACTED]")
+            .field("challenge", &self.challenge)
+            .field("method", &self.method)
+            .finish()
+    }
+}
+
 impl PkceChallenge {
-    /// Generate a new PKCE challenge pair.
+    /// Generate a new PKCE challenge pair using `OsRng` (C-6).
     pub fn generate() -> Self {
-        use rand::Rng;
         use sha2::{Digest, Sha256};
 
-        // Generate 32 random bytes for the verifier
-        let random_bytes: Vec<u8> = (0..32).map(|_| rand::thread_rng().r#gen::<u8>()).collect();
+        // Generate 32 random bytes for the verifier using OsRng (C-6)
+        let mut random_bytes = [0u8; 32];
+        OsRng.fill_bytes(&mut random_bytes);
         let verifier = base64::Engine::encode(
             &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-            &random_bytes,
+            random_bytes,
         );
 
         // SHA256 hash the verifier to create the challenge
@@ -120,7 +214,7 @@ impl PkceChallenge {
         );
 
         Self {
-            verifier,
+            verifier: SecretString::from(verifier),
             challenge,
             method: "S256".to_string(),
         }
@@ -158,9 +252,9 @@ impl OAuthFlowManager {
     ///
     /// Returns the authorization URL that the user should open in their browser.
     pub async fn start_flow(&self, provider: &str, config: OAuthConfig) -> Result<String, String> {
-        // Generate state parameter for CSRF protection
+        // Generate state parameter for CSRF protection using OsRng (C-6)
         use rand::Rng;
-        let state: String = rand::thread_rng()
+        let state: String = OsRng
             .sample_iter(&rand::distributions::Alphanumeric)
             .take(32)
             .map(char::from)
@@ -242,11 +336,11 @@ impl OAuthFlowManager {
         ];
 
         if let Some(ref secret) = flow.config.client_secret {
-            params.push(("client_secret", secret.clone()));
+            params.push(("client_secret", secret.expose_secret().to_string()));
         }
 
         if let Some(ref pkce) = flow.pkce {
-            params.push(("code_verifier", pkce.verifier.clone()));
+            params.push(("code_verifier", pkce.verifier.expose_secret().to_string()));
         }
 
         let response = self
@@ -296,12 +390,12 @@ impl OAuthFlowManager {
 
         let mut params = vec![
             ("grant_type", "refresh_token".to_string()),
-            ("refresh_token", refresh_token.clone()),
+            ("refresh_token", refresh_token.expose_secret().to_string()),
             ("client_id", config.client_id.clone()),
         ];
 
         if let Some(ref secret) = config.client_secret {
-            params.push(("client_secret", secret.clone()));
+            params.push(("client_secret", secret.expose_secret().to_string()));
         }
 
         drop(stored); // Release lock before HTTP call
@@ -359,9 +453,9 @@ impl OAuthFlowManager {
 
         if tokens.is_expired() && tokens.can_refresh() {
             let refreshed = self.refresh_token(provider, config).await?;
-            Ok(refreshed.access_token)
+            Ok(refreshed.access_token.expose_secret().to_string())
         } else {
-            Ok(tokens.access_token)
+            Ok(tokens.access_token.expose_secret().to_string())
         }
     }
 
@@ -397,7 +491,7 @@ mod tests {
     fn test_oauth_config() {
         let config = OAuthConfig {
             client_id: "test-client".to_string(),
-            client_secret: Some("secret".to_string()),
+            client_secret: Some(SecretString::from("secret".to_string())),
             authorize_url: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
             redirect_uri: "http://localhost:8080/callback".to_string(),
@@ -409,29 +503,72 @@ mod tests {
     }
 
     #[test]
+    fn test_oauth_config_debug_redacts_secret() {
+        let config = OAuthConfig {
+            client_id: "test-client".to_string(),
+            client_secret: Some(SecretString::from("super-secret-value".to_string())),
+            authorize_url: "https://example.com/auth".to_string(),
+            token_url: "https://example.com/token".to_string(),
+            redirect_uri: "http://localhost:8080/callback".to_string(),
+            scopes: vec![],
+            use_pkce: true,
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(debug_output.contains("[REDACTED]"));
+        assert!(!debug_output.contains("super-secret-value"));
+    }
+
+    #[test]
+    fn test_oauth_tokens_debug_redacts() {
+        let tokens = OAuthTokens {
+            access_token: SecretString::from("secret-access-token".to_string()),
+            token_type: "Bearer".to_string(),
+            refresh_token: Some(SecretString::from("secret-refresh-token".to_string())),
+            expires_in: Some(3600),
+            scope: None,
+            obtained_at: None,
+        };
+        let debug_output = format!("{:?}", tokens);
+        assert!(debug_output.contains("[REDACTED]"));
+        assert!(!debug_output.contains("secret-access-token"));
+        assert!(!debug_output.contains("secret-refresh-token"));
+    }
+
+    #[test]
     fn test_pkce_challenge() {
         let pkce = PkceChallenge::generate();
-        assert!(!pkce.verifier.is_empty());
+        assert!(!pkce.verifier.expose_secret().is_empty());
         assert!(!pkce.challenge.is_empty());
         assert_eq!(pkce.method, "S256");
 
         // Verifier and challenge should be different
-        assert_ne!(pkce.verifier, pkce.challenge);
+        assert_ne!(pkce.verifier.expose_secret(), &pkce.challenge);
     }
 
     #[test]
     fn test_pkce_challenge_unique() {
         let pkce1 = PkceChallenge::generate();
         let pkce2 = PkceChallenge::generate();
-        assert_ne!(pkce1.verifier, pkce2.verifier);
+        assert_ne!(
+            pkce1.verifier.expose_secret(),
+            pkce2.verifier.expose_secret()
+        );
+    }
+
+    #[test]
+    fn test_pkce_debug_redacts_verifier() {
+        let pkce = PkceChallenge::generate();
+        let debug_output = format!("{:?}", pkce);
+        assert!(debug_output.contains("[REDACTED]"));
+        assert!(!debug_output.contains(pkce.verifier.expose_secret()));
     }
 
     #[test]
     fn test_token_expiry() {
         let tokens = OAuthTokens {
-            access_token: "test".to_string(),
+            access_token: SecretString::from("test".to_string()),
             token_type: "Bearer".to_string(),
-            refresh_token: Some("refresh".to_string()),
+            refresh_token: Some(SecretString::from("refresh".to_string())),
             expires_in: Some(3600),
             scope: None,
             obtained_at: Some(Instant::now()),
@@ -443,7 +580,7 @@ mod tests {
     #[test]
     fn test_token_expired() {
         let tokens = OAuthTokens {
-            access_token: "test".to_string(),
+            access_token: SecretString::from("test".to_string()),
             token_type: "Bearer".to_string(),
             refresh_token: None,
             expires_in: Some(0),
@@ -452,6 +589,19 @@ mod tests {
         };
         assert!(tokens.is_expired());
         assert!(!tokens.can_refresh());
+    }
+
+    #[test]
+    fn test_expose_access_token() {
+        let tokens = OAuthTokens {
+            access_token: SecretString::from("my-token-value".to_string()),
+            token_type: "Bearer".to_string(),
+            refresh_token: None,
+            expires_in: None,
+            scope: None,
+            obtained_at: None,
+        };
+        assert_eq!(tokens.expose_access_token(), "my-token-value");
     }
 
     #[tokio::test]

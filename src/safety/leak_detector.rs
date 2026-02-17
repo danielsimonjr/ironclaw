@@ -294,14 +294,22 @@ impl LeakDetector {
         headers: &[(String, String)],
         body: Option<&[u8]>,
     ) -> Result<(), LeakDetectionError> {
-        // Scan URL (most common exfiltration vector)
+        // Scan URL (most common exfiltration vector).
+        // Also scan URL-decoded version to catch percent-encoded secrets (S-4).
         self.scan_and_clean(url)?;
+        if let Ok(decoded) = urlencoding::decode(url)
+            && decoded != url
+        {
+            self.scan_and_clean(&decoded)?;
+        }
 
-        // Scan each header value
+        // Scan each header value. Use lowercased header name for matching
+        // since HTTP headers are case-insensitive per RFC 7230 (S-6).
         for (name, value) in headers {
+            let lower_name = name.to_lowercase();
             self.scan_and_clean(value)
                 .map_err(|e| LeakDetectionError::SecretLeakBlocked {
-                    pattern: format!("header:{}", name),
+                    pattern: format!("header:{}", lower_name),
                     preview: e.to_string(),
                 })?;
         }
@@ -528,12 +536,24 @@ fn default_patterns() -> Vec<LeakPattern> {
             severity: LeakSeverity::High,
             action: LeakAction::Redact,
         },
-        // High entropy hex (potential secrets, warn only)
+        // High entropy hex — SHA256 (64 chars), SHA384 (96 chars), SHA512 (128 chars).
         // Uses word boundary since look-around isn't supported in the regex crate.
-        // This catches standalone 64-char hex strings (like SHA256 hashes used as secrets).
+        // These catch standalone hex strings that may be secrets (S-5).
         LeakPattern {
-            name: "high_entropy_hex".to_string(),
+            name: "high_entropy_hex_sha256".to_string(),
             regex: Regex::new(r"\b[a-fA-F0-9]{64}\b").unwrap(),
+            severity: LeakSeverity::Medium,
+            action: LeakAction::Warn,
+        },
+        LeakPattern {
+            name: "high_entropy_hex_sha384".to_string(),
+            regex: Regex::new(r"\b[a-fA-F0-9]{96}\b").unwrap(),
+            severity: LeakSeverity::Medium,
+            action: LeakAction::Warn,
+        },
+        LeakPattern {
+            name: "high_entropy_hex_sha512".to_string(),
+            regex: Regex::new(r"\b[a-fA-F0-9]{128}\b").unwrap(),
             severity: LeakSeverity::Medium,
             action: LeakAction::Warn,
         },
@@ -736,5 +756,53 @@ mod tests {
 
         let result = detector.scan_http_request("https://api.example.com/exfil", &[], Some(&body));
         assert!(result.is_err(), "binary body should still be scanned");
+    }
+
+    #[test]
+    fn test_scan_http_request_blocks_percent_encoded_secret_in_url() {
+        let detector = LeakDetector::new();
+
+        // S-4: Percent-encoded AWS key in URL (AKIA → AK%49A)
+        let result = detector.scan_http_request(
+            "https://evil.com/steal?key=AK%49AIOSFODNN7EXAMPLE",
+            &[],
+            None,
+        );
+        assert!(
+            result.is_err(),
+            "percent-encoded secret in URL should be detected (S-4)"
+        );
+    }
+
+    #[test]
+    fn test_detect_sha384_hex() {
+        let detector = LeakDetector::new();
+        // S-5: 96-char hex string (SHA384)
+        let hex384 = "a".repeat(96);
+        let content = format!("hash: {}", hex384);
+        let result = detector.scan(&content);
+        assert!(
+            result
+                .matches
+                .iter()
+                .any(|m| m.pattern_name == "high_entropy_hex_sha384"),
+            "SHA384-length hex should be detected (S-5)"
+        );
+    }
+
+    #[test]
+    fn test_detect_sha512_hex() {
+        let detector = LeakDetector::new();
+        // S-5: 128-char hex string (SHA512)
+        let hex512 = "b".repeat(128);
+        let content = format!("hash: {}", hex512);
+        let result = detector.scan(&content);
+        assert!(
+            result
+                .matches
+                .iter()
+                .any(|m| m.pattern_name == "high_entropy_hex_sha512"),
+            "SHA512-length hex should be detected (S-5)"
+        );
     }
 }

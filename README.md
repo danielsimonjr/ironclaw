@@ -36,13 +36,15 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 
 ### Security First
 
-- **WASM Sandbox** - Untrusted tools run in isolated WebAssembly containers with capability-based permissions
-- **Credential Protection** - Secrets are never exposed to tools; injected at the host boundary with leak detection
-- **Prompt Injection Defense** - Pattern detection, Unicode normalization, content sanitization, and policy enforcement
+- **WASM Sandbox** - Untrusted tools run in isolated WebAssembly containers with capability-based permissions; approval-required tools blocked from WASM invocation
+- **Credential Protection** - Secrets use `SecretString` with automatic memory zeroing; `OsRng` for all security tokens; OAuth tokens never serialized or logged
+- **Prompt Injection Defense** - Pattern detection, Unicode normalization, HTML entity decoding, content sanitization, and policy enforcement
 - **Endpoint Allowlisting** - HTTP requests only to explicitly approved hosts and paths
-- **Log Redaction** - Automatic redaction of API keys, Bearer tokens, JWTs, and credentials from log output
+- **Log Redaction** - Automatic redaction of API keys, Bearer tokens, JWTs, Basic auth, database connection strings, GitHub/Slack tokens
 - **SSRF Prevention** - DNS rebinding protection, private IP rejection, redirect blocking
-- **Elevated Mode** - Time-limited privileged execution with full audit tracking
+- **Elevated Mode** - Session-bound privileged execution with duration clamping [60s, 8h] and audit tracking
+- **Binary Allowlist** - Enforced by default; curated POSIX utility allowlist prevents unauthorized binary execution
+- **Path Traversal Protection** - URL-encoded, double-encoded, and backslash traversal variants detected and blocked
 
 ### Always Available
 
@@ -225,9 +227,11 @@ All untrusted tools run in isolated WebAssembly containers:
 - **Capability-based permissions** - Explicit opt-in for HTTP, secrets, tool invocation
 - **Endpoint allowlisting** - HTTP requests only to approved hosts/paths
 - **Credential injection** - Secrets injected at host boundary, never exposed to WASM code
-- **Leak detection** - Scans requests and responses for secret exfiltration attempts
+- **Leak detection** - Scans requests and responses for secret exfiltration attempts, including URL percent-encoded secrets and SHA256/384/512 hex patterns
+- **Approval gate** - Tools requiring user approval (shell, http, write_file, apply_patch, build_software) cannot be invoked from WASM
 - **Rate limiting** - Per-tool request limits to prevent abuse
 - **Resource limits** - Memory, CPU, and execution time constraints
+- **Binary allowlist** - Enforced by default; only curated POSIX utilities permitted
 
 ```
 WASM ──► Allowlist ──► Leak Scan ──► Credential ──► Execute ──► Leak Scan ──► WASM
@@ -239,20 +243,24 @@ WASM ──► Allowlist ──► Leak Scan ──► Credential ──► Exec
 External content passes through multiple security layers:
 
 - Unicode normalization (zero-width chars, homoglyph detection)
+- HTML/XML entity decoding (prevents `&#115;ystem:` bypasses)
 - Pattern-based detection of injection attempts
 - Content sanitization and escaping with recursion depth limits
 - Policy rules with severity levels (Block/Warn/Review/Sanitize)
+- Path traversal detection (URL-encoded, double-encoded, backslash variants)
 - Tool output wrapping for safe LLM context injection
 
 ### Data Protection
 
 - All data stored locally in your PostgreSQL or libSQL database
-- Secrets encrypted with AES-256-GCM
+- Secrets encrypted with AES-256-GCM; OAuth tokens use `SecretString` with automatic memory zeroing
 - System keychain integration (macOS Keychain, Linux GNOME Keyring/KWallet)
 - No telemetry, analytics, or data sharing
 - Full audit log of all tool executions
-- Log redaction of sensitive data (API keys, tokens, credentials)
+- Log redaction of sensitive data (API keys, tokens, JWTs, Basic auth, database connection strings, GitHub/Slack tokens)
 - Constant-time token comparison to prevent timing attacks
+- `OsRng` for all security-critical random values (auth tokens, PKCE, orchestrator tokens)
+- Orchestrator tokens with TTL expiry (default 4h) for worker authentication
 
 ## Architecture
 
@@ -392,7 +400,7 @@ cargo build --no-default-features --features libsql
 
 ### Testing
 
-IronClaw has ~1,200 unit tests across ~190 source files, plus 53 integration tests. Tests cover safety layers, agent logic, channel routing, tool execution, configuration parsing, state machine transitions, memory security, and search algorithms.
+IronClaw has ~1,840 unit tests across ~190 source files, plus 53 integration tests. Tests cover safety layers, agent logic, channel routing, tool execution, configuration parsing, state machine transitions, memory security, search algorithms, and security hardening.
 
 ```bash
 # Run all tests (default features)
