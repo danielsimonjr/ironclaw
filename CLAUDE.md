@@ -51,7 +51,7 @@ Channels (REPL, HTTP, WASM, Web Gateway)
 | `Database` | `src/db/mod.rs` | ~75 async methods for all persistence. **Both backends must be updated for new features.** |
 | `Channel` | `src/channels/channel.rs` | Input sources (REPL, HTTP, WASM, web gateway) |
 | `Tool` | `src/tools/tool.rs` | Executable capabilities (built-in, WASM, MCP) |
-| `LlmProvider` | `src/llm/provider.rs` | LLM backends (NEAR AI, OpenAI, Anthropic, Gemini, Bedrock, Ollama) |
+| `LlmProvider` | `src/llm/provider.rs` | LLM backends (NEAR AI, OpenAI, Anthropic, Gemini, Bedrock, Ollama, OpenRouter) |
 | `EmbeddingProvider` | `src/workspace/embeddings.rs` | Vector embedding backends (OpenAI, Gemini, local hash-based) |
 | `SuccessEvaluator` | `src/evaluation/success.rs` | Job outcome evaluation |
 
@@ -75,7 +75,7 @@ The codebase is organized into 28 public modules (`src/lib.rs`):
 | `history` | Job/session/conversation history persistence and analytics |
 | `hooks` | Lifecycle hooks engine (beforeInbound, beforeOutbound, beforeToolCall, onSessionStart, onSessionEnd, transformResponse), 8 bundled hooks, outbound webhooks, Gmail pub/sub, audio transcription |
 | `hot_reload` | Dynamic component reloading with file system watching |
-| `llm` | LLM provider abstraction, multi-provider support (NEAR AI, OpenAI, Anthropic, Gemini, Bedrock, Ollama), failover chains, auto-discovery, thinking modes, reasoning, cost tracking |
+| `llm` | LLM provider abstraction, multi-provider support (NEAR AI, OpenAI, Anthropic, Gemini, Bedrock, Ollama, OpenRouter), failover chains, auto-discovery, thinking modes, reasoning, cost tracking |
 | `media` | Image processing, PDF extraction, audio transcription, video metadata, vision integration, TTS (OpenAI + Edge), sticker conversion, MIME detection, media caching, large document processing via RLM techniques |
 | `orchestrator` | Container job orchestration, internal API (`:50051`), per-job bearer token auth |
 | `pairing` | DM approval flow for unknown senders, device pairing with challenge codes |
@@ -358,7 +358,7 @@ Config loads with priority: environment variables > database settings > defaults
 
 - `DATABASE_URL` / `DATABASE_BACKEND` — Connection string and backend (`postgres` default, or `libsql`)
 - `DATABASE_POOL_SIZE` — Connection pool size (default 10)
-- `LLM_BACKEND` — LLM provider: `nearai` (default), `openai`, `anthropic`, `ollama`, `openai_compatible`, `gemini`, `bedrock`
+- `LLM_BACKEND` — LLM provider: `nearai` (default), `openai`, `anthropic`, `ollama`, `openai_compatible`, `gemini`, `bedrock`, `openrouter`
 - `NEARAI_SESSION_TOKEN` / `NEARAI_MODEL` / `NEARAI_BASE_URL` / `NEARAI_AUTH_URL` — NEAR AI provider (when `LLM_BACKEND=nearai`)
 - `OPENAI_API_KEY` / `OPENAI_MODEL` — OpenAI provider (when `LLM_BACKEND=openai`)
 - `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — Anthropic provider (when `LLM_BACKEND=anthropic`)
@@ -366,6 +366,7 @@ Config loads with priority: environment variables > database settings > defaults
 - `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` — OpenAI-compatible provider (when `LLM_BACKEND=openai_compatible`)
 - `GEMINI_API_KEY` / `GEMINI_MODEL` — Google Gemini provider (when `LLM_BACKEND=gemini`)
 - `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `BEDROCK_MODEL` — AWS Bedrock provider (when `LLM_BACKEND=bedrock`)
+- `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` / `OPENROUTER_BASE_URL` / `OPENROUTER_REFERER` — OpenRouter provider (when `LLM_BACKEND=openrouter`)
 - `GATEWAY_ENABLED` / `GATEWAY_PORT` / `GATEWAY_AUTH_TOKEN` — Web UI gateway
 - `SANDBOX_ENABLED` — Docker container isolation
 - `CLAUDE_CODE_ENABLED` — Claude CLI delegation mode

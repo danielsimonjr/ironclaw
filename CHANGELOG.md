@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenRouter LLM provider** — unified API gateway for 200+ models from OpenAI, Anthropic, Google, Meta, and others through a single endpoint:
+  - Full `LlmProvider` trait implementation with chat completions and tool calling (`src/llm/openrouter.rs`)
+  - `OpenRouter` variant in `LlmBackend` enum with env var config: `OPENROUTER_API_KEY` (required), `OPENROUTER_MODEL` (default: `openai/gpt-4o`), `OPENROUTER_BASE_URL`, `OPENROUTER_REFERER`
+  - Auto-discovery support via OpenRouter `/models` endpoint (`src/llm/auto_discovery.rs`)
+  - Setup wizard integration with default model suggestions (GPT-4o, Claude Sonnet 4, Gemini 2.0 Flash, Llama 4 Maverick)
+  - Runtime model switching and per-model cost lookup
+
 - **Windows installer and PowerShell install script** ([#13](https://github.com/nearai/ironclaw/pull/13)):
   - PowerShell installer (`deploy/windows/ironclaw-installer.ps1`) with one-liner install: `irm .../ironclaw-installer.ps1 | iex`
   - Architecture detection (x86_64, ARM64 via Windows emulation)

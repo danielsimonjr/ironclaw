@@ -63,9 +63,10 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 - **Google Gemini** - REST API with function calling support
 - **AWS Bedrock** - SigV4 authentication with Converse API
 - **Ollama** - Local inference, no account needed
-- **OpenAI-compatible** - vLLM, LiteLLM, Together, OpenRouter, and more
+- **OpenRouter** - Unified API gateway for 200+ models from multiple providers
+- **OpenAI-compatible** - vLLM, LiteLLM, Together, and more
 - **Failover Chains** - Priority-based multi-provider failover with cooldown and exponential backoff
-- **Auto-discovery** - Automatic model listing for OpenAI, Anthropic, and Ollama
+- **Auto-discovery** - Automatic model listing for OpenAI, Anthropic, Ollama, and OpenRouter
 - **Thinking Modes** - Low/medium/high reasoning depth with configurable temperature and token limits
 
 ### Self-Expanding
@@ -103,7 +104,7 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 
 - Rust 1.92+
 - PostgreSQL 15+ with [pgvector](https://github.com/pgvector/pgvector) extension, **or** libSQL/Turso (embedded, no server needed)
-- LLM provider account or API key (configured via setup wizard; supports NEAR AI, OpenAI, Anthropic, Google Gemini, AWS Bedrock, Ollama, and OpenAI-compatible endpoints)
+- LLM provider account or API key (configured via setup wizard; supports NEAR AI, OpenAI, Anthropic, Google Gemini, AWS Bedrock, Ollama, OpenRouter, and OpenAI-compatible endpoints)
 
 ## Download or Build
 
@@ -196,7 +197,7 @@ ironclaw onboard
 ```
 
 The wizard handles database connection, LLM provider selection (NEAR AI, OpenAI,
-Anthropic, Google Gemini, AWS Bedrock, Ollama, or OpenAI-compatible), and secrets
+Anthropic, Google Gemini, AWS Bedrock, Ollama, OpenRouter, or OpenAI-compatible), and secrets
 encryption (using your system keychain). All settings are saved to
 `~/.ironclaw/settings.json`.
 
@@ -208,7 +209,7 @@ Key configuration options (see `.env.example` for the full list):
 |----------|-------------|
 | `DATABASE_BACKEND` | `postgres` (default) or `libsql` |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `LLM_BACKEND` | `nearai`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `gemini`, `bedrock` |
+| `LLM_BACKEND` | `nearai`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `gemini`, `bedrock`, `openrouter` |
 | `GATEWAY_ENABLED` | Enable web UI gateway |
 | `SANDBOX_ENABLED` | Enable Docker container isolation |
 | `HEARTBEAT_ENABLED` | Enable proactive background execution |
@@ -404,7 +405,7 @@ Key differences:
 - **WASM sandbox vs Docker** - Lightweight, capability-based security
 - **Dual database backend** - PostgreSQL for production, libSQL/Turso for embedded/edge
 - **Security-first design** - Multiple defense layers, credential protection, log redaction
-- **Multi-provider LLM** - 7+ providers with failover, auto-discovery, and thinking modes
+- **Multi-provider LLM** - 8+ providers with failover, auto-discovery, and thinking modes
 
 ## License
 
