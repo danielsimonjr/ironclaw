@@ -107,12 +107,12 @@ IronClaw is the AI assistant you can actually trust with your personal and profe
 
 ## Download or Build
 
-Visit [Releases page](https://github.com/nearai/ironclaw/releases/) to see the latest updates.
+Visit [Releases page](https://github.com/danielsimonjr/ironclaw/releases/) to see the latest updates.
 
 <details>
   <summary>Install via Windows Installer (Windows)</summary>
 
-Download the [Windows Installer (.msi)](https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-x86_64-pc-windows-msvc.msi) and run it. The MSI installs per-user to `LocalAppData\Programs\IronClaw` and adds `ironclaw` to your PATH automatically.
+Download the [Windows Installer (.msi)](https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-x86_64-pc-windows-msvc.msi) and run it. The MSI installs per-user to `LocalAppData\Programs\IronClaw` and adds `ironclaw` to your PATH automatically.
 
 </details>
 
@@ -139,7 +139,7 @@ The PowerShell installer supports additional options when saved and run as a scr
   <summary>Install via shell script (macOS, Linux, Windows/WSL)</summary>
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.sh | sh
 ```
 </details>
 
@@ -150,7 +150,7 @@ Install it with `cargo`, just make sure you have [Rust](https://rustup.rs) insta
 
 ```bash
 # Clone the repository
-git clone https://github.com/nearai/ironclaw.git
+git clone https://github.com/danielsimonjr/ironclaw.git
 cd ironclaw
 
 # Build (PostgreSQL backend, default)
