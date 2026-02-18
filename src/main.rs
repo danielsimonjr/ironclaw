@@ -434,6 +434,16 @@ async fn main() -> anyhow::Result<()> {
     // Load bootstrap config (4 fields that must live on disk)
     let bootstrap = ironclaw::bootstrap::BootstrapConfig::load();
 
+    // When --no-db is passed, supply a placeholder DATABASE_URL so config
+    // loading doesn't fail for the postgres backend. The URL is never used
+    // because the database connection is skipped entirely.
+    if cli.no_db && std::env::var("DATABASE_URL").is_err() {
+        // SAFETY: This is single-threaded at startup, before any spawned tasks.
+        unsafe {
+            std::env::set_var("DATABASE_URL", "postgres://unused:unused@localhost/unused");
+        }
+    }
+
     // Load initial config from env + disk (before DB is available)
     let mut config = match Config::from_env().await {
         Ok(c) => c,

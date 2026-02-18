@@ -46,12 +46,14 @@ pub trait TranscriptionProvider: Send + Sync {
 }
 
 /// OpenAI Whisper-based transcription provider.
+#[allow(dead_code)]
 pub struct WhisperProvider {
     api_key: String,
     base_url: String,
     model: String,
 }
 
+#[allow(dead_code)]
 impl WhisperProvider {
     /// Create a new Whisper provider.
     pub fn new(api_key: String) -> Self {

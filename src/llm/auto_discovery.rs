@@ -402,9 +402,7 @@ fn is_openai_chat_model(id: &str) -> bool {
 
 /// Infer (context_length, supports_tools, supports_vision) from an OpenAI model ID.
 fn openai_model_capabilities(id: &str) -> (u64, bool, bool) {
-    if id.starts_with("gpt-4o") {
-        (128_000, true, true)
-    } else if id.starts_with("gpt-4-turbo") {
+    if id.starts_with("gpt-4o") || id.starts_with("gpt-4-turbo") {
         (128_000, true, true)
     } else if id.starts_with("gpt-4") {
         (8_192, true, false)

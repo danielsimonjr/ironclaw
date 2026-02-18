@@ -255,8 +255,11 @@ mod job_state_machine {
             .expect("InProgress -> Completed should succeed");
         assert_eq!(ctx.state, JobState::Completed);
 
-        ctx.transition_to(JobState::Submitted, Some("Submitted for review".to_string()))
-            .expect("Completed -> Submitted should succeed");
+        ctx.transition_to(
+            JobState::Submitted,
+            Some("Submitted for review".to_string()),
+        )
+        .expect("Completed -> Submitted should succeed");
         assert_eq!(ctx.state, JobState::Submitted);
 
         ctx.transition_to(JobState::Accepted, Some("Approved".to_string()))
@@ -309,7 +312,8 @@ mod job_state_machine {
     fn test_terminal_states_cannot_transition() {
         let mut ctx = JobContext::new("Done", "Already done");
         ctx.transition_to(JobState::InProgress, None).unwrap();
-        ctx.transition_to(JobState::Failed, Some("Failed".to_string())).unwrap();
+        ctx.transition_to(JobState::Failed, Some("Failed".to_string()))
+            .unwrap();
 
         assert!(ctx.transition_to(JobState::InProgress, None).is_err());
         assert!(ctx.transition_to(JobState::Pending, None).is_err());
@@ -527,8 +531,8 @@ mod leak_detection {
     #[test]
     fn test_bearer_token_scanned() {
         let detector = LeakDetector::new();
-        let result = detector
-            .scan("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.xyz");
+        let result =
+            detector.scan("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.xyz");
         assert!(
             !result.matches.is_empty(),
             "Should detect Bearer token pattern"
@@ -563,7 +567,11 @@ mod log_redaction {
         // Bearer token pattern requires 20+ chars after "Bearer "
         let input = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
         let redacted = redactor.redact(input);
-        assert!(redacted.contains("[REDACTED"), "Bearer token should be redacted, got: {}", redacted);
+        assert!(
+            redacted.contains("[REDACTED"),
+            "Bearer token should be redacted, got: {}",
+            redacted
+        );
     }
 
     #[test]
@@ -572,8 +580,11 @@ mod log_redaction {
         // sk-proj- pattern requires 20+ alphanumeric chars after prefix
         let input = "Using API key: sk-proj-abc123def456ghi789jkl012mno";
         let redacted = redactor.redact(input);
-        assert!(!redacted.contains("sk-proj-abc123def456ghi789jkl012mno"),
-            "API key should be redacted, got: {}", redacted);
+        assert!(
+            !redacted.contains("sk-proj-abc123def456ghi789jkl012mno"),
+            "API key should be redacted, got: {}",
+            redacted
+        );
     }
 
     #[test]
@@ -581,7 +592,11 @@ mod log_redaction {
         let redactor = LogRedactor::new();
         let input = "Connecting to postgres://user:password123@localhost:5432/mydb";
         let redacted = redactor.redact(input);
-        assert!(redacted.contains("[REDACTED"), "DB URL should be redacted, got: {}", redacted);
+        assert!(
+            redacted.contains("[REDACTED"),
+            "DB URL should be redacted, got: {}",
+            redacted
+        );
     }
 
     #[test]
@@ -590,8 +605,11 @@ mod log_redaction {
         // Use properly-sized secrets that match the regex patterns
         let input = "Key: sk-proj-abc123def456ghi789jkl012mno Password: postgres://u:pass@h/d";
         let redacted = redactor.redact(input);
-        assert!(!redacted.contains("sk-proj-abc123def456ghi789jkl012mno"),
-            "API key should be redacted, got: {}", redacted);
+        assert!(
+            !redacted.contains("sk-proj-abc123def456ghi789jkl012mno"),
+            "API key should be redacted, got: {}",
+            redacted
+        );
     }
 
     #[test]
@@ -599,7 +617,11 @@ mod log_redaction {
         let redactor = LogRedactor::new();
         // Use a properly long bearer token
         let owned = redactor.redact_owned("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U");
-        assert!(owned.contains("[REDACTED"), "Should contain redaction marker, got: {}", owned);
+        assert!(
+            owned.contains("[REDACTED"),
+            "Should contain redaction marker, got: {}",
+            owned
+        );
     }
 }
 
@@ -680,7 +702,7 @@ mod message_routing {
 // ============================================================================
 mod inline_commands {
     use ironclaw::channels::inline_commands::{
-        parse_inline_command, InlineCommandConfig, ParsedCommand,
+        InlineCommandConfig, ParsedCommand, parse_inline_command,
     };
 
     #[test]
@@ -737,7 +759,13 @@ mod inline_commands {
 
         let no = parse_inline_command("no", &config);
         assert!(
-            matches!(no, ParsedCommand::Approval { approved: false, .. }),
+            matches!(
+                no,
+                ParsedCommand::Approval {
+                    approved: false,
+                    ..
+                }
+            ),
             "no should be rejection"
         );
 
@@ -997,10 +1025,7 @@ mod hook_system {
         assert_eq!(HookType::BeforeToolCall.to_string(), "beforeToolCall");
         assert_eq!(HookType::OnSessionStart.to_string(), "onSessionStart");
         assert_eq!(HookType::OnSessionEnd.to_string(), "onSessionEnd");
-        assert_eq!(
-            HookType::TransformResponse.to_string(),
-            "transformResponse"
-        );
+        assert_eq!(HookType::TransformResponse.to_string(), "transformResponse");
         assert_eq!(HookType::TranscribeAudio.to_string(), "transcribeAudio");
     }
 

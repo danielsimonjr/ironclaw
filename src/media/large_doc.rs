@@ -592,12 +592,11 @@ fn extract_json_array(text: &str) -> Option<&str> {
         }
     }
     // Try finding a raw JSON array
-    if let Some(start) = text.find('[') {
-        if let Some(end) = text.rfind(']') {
-            if start < end {
-                return Some(&text[start..=end]);
-            }
-        }
+    if let Some(start) = text.find('[')
+        && let Some(end) = text.rfind(']')
+        && start < end
+    {
+        return Some(&text[start..=end]);
     }
     None
 }

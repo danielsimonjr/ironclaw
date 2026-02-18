@@ -1,6 +1,8 @@
 name: Code Style
 on:
   pull_request:
+  push:
+    branches: [main]
 
 jobs:
   codestyle:
@@ -19,4 +21,4 @@ jobs:
       run: |
         cargo fmt --all -- --check
     - name: Check lints (cargo clippy)
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --all --benches --tests --examples --all-features -- -D warnings
