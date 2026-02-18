@@ -57,12 +57,14 @@ pub trait VisionProvider: Send + Sync {
 }
 
 /// OpenAI-compatible vision provider (works with GPT-4V, Claude, etc.).
+#[allow(dead_code)]
 pub struct OpenAiVisionProvider {
     api_key: String,
     base_url: String,
     model: String,
 }
 
+#[allow(dead_code)]
 impl OpenAiVisionProvider {
     /// Create a new OpenAI vision provider.
     pub fn new(api_key: String, model: String) -> Self {

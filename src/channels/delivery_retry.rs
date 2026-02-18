@@ -256,7 +256,7 @@ impl DeliveryRetryManager {
         match operation().await {
             Ok(()) => {
                 metrics.successful.fetch_add(1, Ordering::Relaxed);
-                return DeliveryOutcome::Delivered { attempts: 1 };
+                DeliveryOutcome::Delivered { attempts: 1 }
             }
             Err(e) => {
                 if !config.enabled || config.max_retries == 0 {

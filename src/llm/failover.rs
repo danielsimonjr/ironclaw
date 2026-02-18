@@ -156,6 +156,7 @@ impl FailoverProvider {
     }
 
     /// Select the next available provider.
+    #[allow(dead_code)]
     async fn select_provider(&self) -> Option<&ProviderEntry> {
         let states = self.states.read().await;
         self.providers

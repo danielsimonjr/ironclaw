@@ -13,15 +13,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev cmake gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
+# Install WASM target and tools for channel builds
+RUN rustup target add wasm32-wasip2 \
+    && cargo install wasm-tools --locked
+
 WORKDIR /app
 
 # Copy manifests first for layer caching
 COPY Cargo.toml Cargo.lock ./
 
-# Copy source and build artifacts
+# Copy source, build script, and build artifacts
+COPY build.rs ./
 COPY src/ src/
 COPY migrations/ migrations/
 COPY wit/ wit/
+COPY channels-src/ channels-src/
 
 RUN cargo build --release --bin ironclaw
 

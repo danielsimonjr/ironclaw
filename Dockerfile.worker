@@ -11,6 +11,10 @@
 
 FROM rust:1.92-bookworm AS builder
 
+# Install WASM target and tools for channel builds
+RUN rustup target add wasm32-wasip2 \
+    && cargo install wasm-tools --locked
+
 WORKDIR /build
 COPY . .
 
