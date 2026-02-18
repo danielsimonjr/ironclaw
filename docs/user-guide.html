@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IronClaw &mdash; User Guide &amp; Maintenance Manual</title>
+<style>
+/* ================================================================
+   Design tokens
+   ================================================================ */
+:root {
+  --bg: #0f1117;
+  --bg-card: #181b24;
+  --bg-code: #1e222d;
+  --border: #2a2e3a;
+  --text: #e0e4ed;
+  --text-muted: #8b91a5;
+  --accent: #5b8af5;
+  --accent-hover: #7da4ff;
+  --success: #4ade80;
+  --warning: #facc15;
+  --danger: #f87171;
+  --sidebar-w: 280px;
+  --header-h: 56px;
+  --radius: 8px;
+  --mono: 'SF Mono', 'Cascadia Mono', 'Fira Code', 'Menlo', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+}
+
+/* ================================================================
+   Reset & base
+   ================================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+img { max-width: 100%; }
+
+/* ================================================================
+   Header
+   ================================================================ */
+header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--header-h);
+  background: rgba(15,17,23,.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 24px;
+}
+header .logo { font-size: 1.2rem; font-weight: 700; letter-spacing: -.02em; }
+header .logo span { color: var(--accent); }
+header nav { margin-left: auto; display: flex; gap: 18px; }
+header nav a { color: var(--text-muted); font-size: .85rem; }
+header nav a:hover { color: var(--text); text-decoration: none; }
+#menu-toggle {
+  display: none; background: none; border: none; color: var(--text);
+  font-size: 1.4rem; cursor: pointer; margin-right: 12px;
+}
+
+/* ================================================================
+   Sidebar
+   ================================================================ */
+aside {
+  position: fixed; top: var(--header-h); left: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 20px 0;
+  transition: transform .3s ease;
+  z-index: 90;
+}
+aside h3 {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--text-muted); padding: 8px 20px 4px; margin-top: 12px;
+}
+aside h3:first-child { margin-top: 0; }
+aside a {
+  display: block; padding: 6px 20px; font-size: .85rem;
+  color: var(--text-muted); border-left: 3px solid transparent;
+  transition: all .15s;
+}
+aside a:hover, aside a.active {
+  color: var(--text); background: rgba(91,138,245,.08);
+  border-left-color: var(--accent); text-decoration: none;
+}
+
+/* ================================================================
+   Main content
+   ================================================================ */
+main {
+  margin-left: var(--sidebar-w);
+  margin-top: var(--header-h);
+  padding: 40px 48px 80px;
+  max-width: 900px;
+}
+section { margin-bottom: 56px; }
+section[id] { scroll-margin-top: calc(var(--header-h) + 20px); }
+h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 16px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { font-size: 1.15rem; font-weight: 600; margin: 24px 0 10px; }
+h4 { font-size: 1rem; font-weight: 600; margin: 16px 0 8px; color: var(--text-muted); }
+p, ul, ol { margin-bottom: 14px; }
+ul, ol { padding-left: 24px; }
+li { margin-bottom: 4px; }
+
+/* ================================================================
+   Code blocks & inline code
+   ================================================================ */
+code {
+  font-family: var(--mono); font-size: .88em;
+  background: var(--bg-code); padding: 2px 6px; border-radius: 4px;
+}
+pre {
+  background: var(--bg-code); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+  overflow-x: auto; margin-bottom: 16px; position: relative;
+}
+pre code { background: none; padding: 0; font-size: .82rem; line-height: 1.6; }
+.copy-btn {
+  position: absolute; top: 8px; right: 8px;
+  background: var(--border); border: none; color: var(--text-muted);
+  padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: .75rem;
+}
+.copy-btn:hover { background: var(--accent); color: #fff; }
+
+/* ================================================================
+   Tables
+   ================================================================ */
+table {
+  width: 100%; border-collapse: collapse; margin-bottom: 16px;
+  font-size: .9rem;
+}
+th, td {
+  text-align: left; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+th { color: var(--text-muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ================================================================
+   Cards & callouts
+   ================================================================ */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+.callout {
+  border-left: 4px solid var(--accent); padding: 14px 18px;
+  background: rgba(91,138,245,.06); border-radius: 0 var(--radius) var(--radius) 0;
+  margin-bottom: 16px;
+}
+.callout.warn { border-left-color: var(--warning); background: rgba(250,204,21,.06); }
+.callout.danger { border-left-color: var(--danger); background: rgba(248,113,113,.06); }
+.callout.success { border-left-color: var(--success); background: rgba(74,222,128,.06); }
+.callout strong { display: block; margin-bottom: 4px; }
+
+/* ================================================================
+   Tabs (playground)
+   ================================================================ */
+.tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 1px solid var(--border); }
+.tab-btn {
+  background: none; border: none; color: var(--text-muted);
+  padding: 10px 18px; cursor: pointer; font-size: .85rem;
+  border-bottom: 2px solid transparent; transition: all .15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; padding: 16px 0; }
+.tab-content.active { display: block; }
+
+/* ================================================================
+   Accordion
+   ================================================================ */
+details {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 10px;
+}
+details summary {
+  padding: 12px 18px; cursor: pointer; font-weight: 600;
+  list-style: none; display: flex; align-items: center; gap: 8px;
+}
+details summary::before { content: '\25B6'; font-size: .7rem; transition: transform .2s; color: var(--text-muted); }
+details[open] summary::before { transform: rotate(90deg); }
+details > div { padding: 0 18px 16px; }
+
+/* ================================================================
+   Search
+   ================================================================ */
+#search {
+  width: 100%; padding: 8px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: .85rem; margin: 0 20px 12px;
+  width: calc(100% - 40px);
+}
+#search:focus { outline: none; border-color: var(--accent); }
+.search-highlight { background: rgba(91,138,245,.3); border-radius: 2px; }
+
+/* ================================================================
+   Badge
+   ================================================================ */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: .7rem; font-weight: 600; text-transform: uppercase;
+}
+.badge.required { background: rgba(248,113,113,.2); color: var(--danger); }
+.badge.optional { background: rgba(91,138,245,.15); color: var(--accent); }
+.badge.default { background: rgba(74,222,128,.15); color: var(--success); }
+
+/* ================================================================
+   Diagram (ASCII art)
+   ================================================================ */
+.diagram {
+  background: var(--bg-code); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; overflow-x: auto;
+  font-family: var(--mono); font-size: .78rem; line-height: 1.4;
+  white-space: pre; margin-bottom: 16px; color: var(--text-muted);
+}
+
+/* ================================================================
+   Progress indicator
+   ================================================================ */
+.progress-bar {
+  background: var(--border); border-radius: 10px; height: 8px;
+  overflow: hidden; margin: 6px 0 12px;
+}
+.progress-bar .fill {
+  height: 100%; border-radius: 10px; background: var(--accent);
+  transition: width .5s ease;
+}
+
+/* ================================================================
+   Responsive
+   ================================================================ */
+@media (max-width: 900px) {
+  aside { transform: translateX(-100%); }
+  aside.open { transform: translateX(0); }
+  main { margin-left: 0; padding: 24px 20px 60px; }
+  #menu-toggle { display: block; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
+<header>
+  <button id="menu-toggle" onclick="document.querySelector('aside').classList.toggle('open')">&#9776;</button>
+  <div class="logo"><span>Iron</span>Claw</div>
+  <nav>
+    <a href="#quickstart">Quick Start</a>
+    <a href="#configuration">Configuration</a>
+    <a href="#cli-reference">CLI</a>
+    <a href="#security">Security</a>
+    <a href="#maintenance">Maintenance</a>
+  </nav>
+</header>
+
+<!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+<aside>
+  <input type="text" id="search" placeholder="Search documentation..." oninput="filterSidebar(this.value)">
+
+  <h3>Getting Started</h3>
+  <a href="#overview">Overview</a>
+  <a href="#prerequisites">Prerequisites</a>
+  <a href="#installation">Installation</a>
+  <a href="#quickstart">Quick Start</a>
+  <a href="#onboarding">Onboarding Wizard</a>
+
+  <h3>Configuration</h3>
+  <a href="#configuration">Configuration Overview</a>
+  <a href="#env-vars">Environment Variables</a>
+  <a href="#llm-providers">LLM Providers</a>
+  <a href="#database-setup">Database Setup</a>
+  <a href="#bootstrap-config">Bootstrap Config</a>
+
+  <h3>Usage</h3>
+  <a href="#cli-reference">CLI Reference</a>
+  <a href="#repl-mode">REPL Mode</a>
+  <a href="#web-gateway">Web Gateway</a>
+  <a href="#channels">Channels</a>
+  <a href="#tools">Tools &amp; Extensions</a>
+  <a href="#memory">Memory &amp; Workspace</a>
+  <a href="#routines">Routines &amp; Cron</a>
+  <a href="#hooks">Hooks System</a>
+  <a href="#jobs">Job System</a>
+
+  <h3>Security</h3>
+  <a href="#security">Security Overview</a>
+  <a href="#safety-layer">Safety Layer</a>
+  <a href="#wasm-sandbox">WASM Sandbox</a>
+  <a href="#credentials">Credential Management</a>
+  <a href="#elevated-mode">Elevated Mode</a>
+  <a href="#access-control">Access Control</a>
+
+  <h3>Architecture</h3>
+  <a href="#architecture">System Architecture</a>
+  <a href="#job-execution">Job Execution Models</a>
+  <a href="#dual-database">Dual Database Backend</a>
+
+  <h3>Maintenance</h3>
+  <a href="#maintenance">Maintenance Overview</a>
+  <a href="#health-checks">Health Checks</a>
+  <a href="#backup-restore">Backup &amp; Restore</a>
+  <a href="#self-repair">Self-Repair System</a>
+  <a href="#session-management">Session Management</a>
+  <a href="#log-management">Log Management</a>
+  <a href="#upgrading">Upgrading</a>
+  <a href="#troubleshooting">Troubleshooting</a>
+
+  <h3>Development</h3>
+  <a href="#building">Building from Source</a>
+  <a href="#testing">Testing</a>
+  <a href="#adding-tools">Adding Tools</a>
+  <a href="#adding-channels">Adding Channels</a>
+</aside>
+
+<!-- ============================================================
+     MAIN CONTENT
+     ============================================================ -->
+<main>
+
+<!-- ************************************************************
+     OVERVIEW
+     ************************************************************ -->
+<section id="overview">
+<h1>IronClaw User Guide &amp; Maintenance Manual</h1>
+<p style="color:var(--text-muted); margin-bottom: 24px;">Version 0.1 &middot; Comprehensive guide for installation, configuration, operation, and maintenance</p>
+
+<div class="card">
+  <h3>What is IronClaw?</h3>
+  <p>IronClaw is a <strong>secure personal AI assistant</strong> built in Rust. It runs as a local service
+  that connects to your choice of LLM provider (OpenAI, Anthropic, Google Gemini, AWS Bedrock,
+  Ollama, OpenRouter, NEAR AI, or any OpenAI-compatible endpoint) and provides a composable,
+  extensible agent system with persistent memory, multi-channel input, WASM-sandboxed tools,
+  and defense-in-depth security.</p>
+</div>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;">&#128274;</div>
+    <h4>Secure by Default</h4>
+    <p style="font-size:.85rem; color:var(--text-muted);">WASM sandbox, prompt injection defense, leak detection, log redaction</p>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;">&#9889;</div>
+    <h4>Multi-Provider LLM</h4>
+    <p style="font-size:.85rem; color:var(--text-muted);">8 providers with failover chains, auto-discovery, thinking modes</p>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;">&#128640;</div>
+    <h4>Self-Expanding</h4>
+    <p style="font-size:.85rem; color:var(--text-muted);">Build WASM tools on the fly, MCP protocol, plugin architecture</p>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;">&#129504;</div>
+    <h4>Persistent Memory</h4>
+    <p style="font-size:.85rem; color:var(--text-muted);">Hybrid search, knowledge graph, spaces, user profiles</p>
+  </div>
+</div>
+</section>
+
+<!-- ************************************************************
+     PREREQUISITES
+     ************************************************************ -->
+<section id="prerequisites">
+<h2>Prerequisites</h2>
+<table>
+  <thead><tr><th>Requirement</th><th>Version</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Rust</td><td>1.92+</td><td><span class="badge required">Required</span> Install via <a href="https://rustup.rs">rustup.rs</a></td></tr>
+    <tr><td>PostgreSQL</td><td>15+</td><td><span class="badge default">Default</span> With <code>pgvector</code> extension</td></tr>
+    <tr><td>libSQL/Turso</td><td>Any</td><td><span class="badge optional">Alternative</span> Embedded, zero-config</td></tr>
+    <tr><td>LLM Provider</td><td>&mdash;</td><td><span class="badge required">Required</span> API key for at least one provider</td></tr>
+    <tr><td>Docker</td><td>20+</td><td><span class="badge optional">Optional</span> For sandboxed execution</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ************************************************************
+     INSTALLATION
+     ************************************************************ -->
+<section id="installation">
+<h2>Installation</h2>
+
+<div class="tabs" id="install-tabs">
+  <button class="tab-btn active" onclick="switchTab('install-tabs','install-shell')">Shell Script</button>
+  <button class="tab-btn" onclick="switchTab('install-tabs','install-ps')">PowerShell</button>
+  <button class="tab-btn" onclick="switchTab('install-tabs','install-cargo')">From Source</button>
+  <button class="tab-btn" onclick="switchTab('install-tabs','install-msi')">MSI Installer</button>
+</div>
+
+<div id="install-shell" class="tab-content active">
+  <h4>macOS / Linux / WSL</h4>
+  <pre><code>curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.sh | sh</code></pre>
+</div>
+
+<div id="install-ps" class="tab-content">
+  <h4>Windows (PowerShell)</h4>
+  <pre><code># One-liner install
+irm https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
+
+# Advanced options (save script first)
+.\ironclaw-installer.ps1 -Version 0.1.3      # Pin version
+.\ironclaw-installer.ps1 -InstallDir "C:\tools"  # Custom directory
+.\ironclaw-installer.ps1 -NoPathUpdate        # Skip PATH modification
+.\ironclaw-installer.ps1 -UseMsi              # Use MSI installer</code></pre>
+</div>
+
+<div id="install-cargo" class="tab-content">
+  <h4>Build from Source</h4>
+  <pre><code># Clone the repository
+git clone https://github.com/danielsimonjr/ironclaw.git
+cd ironclaw
+
+# Build with PostgreSQL backend (default)
+cargo build --release
+
+# Or build with libSQL backend (no PostgreSQL needed)
+cargo build --release --no-default-features --features libsql
+
+# Run tests to verify
+cargo test</code></pre>
+</div>
+
+<div id="install-msi" class="tab-content">
+  <h4>Windows MSI</h4>
+  <p>Download the <code>.msi</code> installer from the
+  <a href="https://github.com/danielsimonjr/ironclaw/releases">Releases page</a>.
+  The MSI installs per-user to <code>LocalAppData\Programs\IronClaw</code> and adds
+  <code>ironclaw</code> to your PATH automatically.</p>
+</div>
+
+<div class="callout success">
+  <strong>Verify installation</strong>
+  After installing, run <code>ironclaw doctor</code> to verify all components are properly configured.
+</div>
+</section>
+
+<!-- ************************************************************
+     QUICK START
+     ************************************************************ -->
+<section id="quickstart">
+<h2>Quick Start</h2>
+<p>Get up and running in three steps:</p>
+
+<div class="card">
+  <h4>Step 1: Run the onboarding wizard</h4>
+  <pre><code>ironclaw onboard</code></pre>
+  <p>The wizard configures your database, LLM provider, and secrets encryption.</p>
+</div>
+
+<div class="card">
+  <h4>Step 2: Start the REPL</h4>
+  <pre><code># Default start
+ironclaw run
+
+# With debug logging
+RUST_LOG=ironclaw=debug ironclaw run</code></pre>
+</div>
+
+<div class="card">
+  <h4>Step 3: Start chatting</h4>
+  <pre><code>&gt; Hello! What can you do?
+
+# Use inline commands
+&gt; /help        # Show available commands
+&gt; /status      # System status
+&gt; /jobs        # List active jobs</code></pre>
+</div>
+</section>
+
+<!-- ************************************************************
+     ONBOARDING
+     ************************************************************ -->
+<section id="onboarding">
+<h2>Onboarding Wizard</h2>
+<p>The onboarding wizard (<code>ironclaw onboard</code>) walks you through initial setup:</p>
+<ol>
+  <li><strong>Database selection</strong> &mdash; Choose PostgreSQL (production) or libSQL (embedded/edge)</li>
+  <li><strong>Database connection</strong> &mdash; Enter connection string or use defaults</li>
+  <li><strong>LLM provider selection</strong> &mdash; Choose from 8 supported providers</li>
+  <li><strong>API key configuration</strong> &mdash; Enter your provider API key</li>
+  <li><strong>Secrets encryption</strong> &mdash; Set up AES-256-GCM vault with system keychain</li>
+</ol>
+<p>Settings are saved to <code>~/.ironclaw/bootstrap.json</code> and the database settings table.</p>
+</section>
+
+<!-- ************************************************************
+     CONFIGURATION
+     ************************************************************ -->
+<section id="configuration">
+<h2>Configuration</h2>
+<p>Configuration loads with priority: <strong>environment variables</strong> &gt; <strong>database settings</strong> &gt; <strong>defaults</strong>.</p>
+
+<div class="callout">
+  <strong>Configuration Precedence</strong>
+  Environment variables always win. Database settings override defaults. The bootstrap config at
+  <code>~/.ironclaw/bootstrap.json</code> provides initial values before the database is connected.
+</div>
+</section>
+
+<section id="env-vars">
+<h2>Environment Variables</h2>
+
+<h3>Core Settings</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>DATABASE_BACKEND</code></td><td><code>postgres</code></td><td>Database backend: <code>postgres</code> or <code>libsql</code></td></tr>
+    <tr><td><code>DATABASE_URL</code></td><td>&mdash;</td><td>PostgreSQL connection string</td></tr>
+    <tr><td><code>DATABASE_POOL_SIZE</code></td><td><code>10</code></td><td>Connection pool size</td></tr>
+  </tbody>
+</table>
+
+<h3>LLM Provider</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>LLM_BACKEND</code></td><td><code>nearai</code></td><td>Provider: nearai, openai, anthropic, ollama, openai_compatible, gemini, bedrock, openrouter</td></tr>
+    <tr><td><code>OPENAI_API_KEY</code></td><td>&mdash;</td><td>OpenAI API key</td></tr>
+    <tr><td><code>ANTHROPIC_API_KEY</code></td><td>&mdash;</td><td>Anthropic API key</td></tr>
+    <tr><td><code>GEMINI_API_KEY</code></td><td>&mdash;</td><td>Google Gemini API key</td></tr>
+    <tr><td><code>OPENROUTER_API_KEY</code></td><td>&mdash;</td><td>OpenRouter API key</td></tr>
+    <tr><td><code>OLLAMA_BASE_URL</code></td><td><code>http://localhost:11434</code></td><td>Ollama server URL</td></tr>
+  </tbody>
+</table>
+
+<h3>Features</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>GATEWAY_ENABLED</code></td><td><code>false</code></td><td>Enable web UI gateway</td></tr>
+    <tr><td><code>GATEWAY_PORT</code></td><td><code>3000</code></td><td>Web gateway port</td></tr>
+    <tr><td><code>GATEWAY_AUTH_TOKEN</code></td><td>&mdash;</td><td>Gateway authentication token</td></tr>
+    <tr><td><code>SANDBOX_ENABLED</code></td><td><code>false</code></td><td>Enable Docker container isolation</td></tr>
+    <tr><td><code>HEARTBEAT_ENABLED</code></td><td><code>false</code></td><td>Enable proactive background execution</td></tr>
+    <tr><td><code>HEARTBEAT_INTERVAL_SECS</code></td><td><code>300</code></td><td>Heartbeat check interval</td></tr>
+    <tr><td><code>AGENT_MAX_PARALLEL_JOBS</code></td><td><code>5</code></td><td>Maximum concurrent jobs</td></tr>
+    <tr><td><code>AGENT_JOB_TIMEOUT_SECS</code></td><td><code>300</code></td><td>Job execution timeout</td></tr>
+    <tr><td><code>AGENT_USE_PLANNING</code></td><td><code>true</code></td><td>Enable planning phase before tool execution</td></tr>
+    <tr><td><code>CLAUDE_CODE_ENABLED</code></td><td><code>false</code></td><td>Enable Claude CLI delegation mode</td></tr>
+  </tbody>
+</table>
+
+<h3>Safety</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>SAFETY_MAX_OUTPUT_LENGTH</code></td><td>&mdash;</td><td>Maximum tool output size</td></tr>
+    <tr><td><code>SAFETY_INJECTION_CHECK_ENABLED</code></td><td><code>true</code></td><td>Enable injection detection</td></tr>
+  </tbody>
+</table>
+
+<h3>Logging</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Example</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>RUST_LOG</code></td><td><code>ironclaw=debug</code></td><td>Targeted logging (also: <code>ironclaw::agent=debug</code>)</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ************************************************************
+     LLM PROVIDERS
+     ************************************************************ -->
+<section id="llm-providers">
+<h2>LLM Providers</h2>
+
+<details>
+  <summary>NEAR AI</summary>
+  <div>
+    <p>Session-based authentication with Responses API and Chat Completions API.</p>
+    <pre><code>LLM_BACKEND=nearai
+NEARAI_SESSION_TOKEN=your-session-token
+NEARAI_MODEL=your-model-name
+NEARAI_BASE_URL=https://api.near.ai   # optional
+NEARAI_AUTH_URL=https://auth.near.ai   # optional</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>OpenAI</summary>
+  <div>
+    <pre><code>LLM_BACKEND=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o   # optional, default model</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>Anthropic (Claude)</summary>
+  <div>
+    <pre><code>LLM_BACKEND=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-5-20250929   # optional</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>Google Gemini</summary>
+  <div>
+    <pre><code>LLM_BACKEND=gemini
+GEMINI_API_KEY=AIza...
+GEMINI_MODEL=gemini-2.0-flash   # optional</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>AWS Bedrock</summary>
+  <div>
+    <pre><code>LLM_BACKEND=bedrock
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+BEDROCK_MODEL=anthropic.claude-3-sonnet   # optional</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>Ollama (Local)</summary>
+  <div>
+    <pre><code>LLM_BACKEND=ollama
+OLLAMA_BASE_URL=http://localhost:11434   # optional
+OLLAMA_MODEL=llama3.1   # optional</code></pre>
+    <div class="callout success">
+      <strong>No API key needed!</strong>
+      Ollama runs locally. Install from <a href="https://ollama.ai">ollama.ai</a> and pull a model first.
+    </div>
+  </div>
+</details>
+
+<details>
+  <summary>OpenRouter</summary>
+  <div>
+    <p>Unified API gateway for 200+ models from multiple providers.</p>
+    <pre><code>LLM_BACKEND=openrouter
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=openai/gpt-4o   # optional
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1   # optional
+OPENROUTER_REFERER=https://your-app.com   # optional</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>OpenAI-Compatible (vLLM, LiteLLM, Together, etc.)</summary>
+  <div>
+    <pre><code>LLM_BACKEND=openai_compatible
+LLM_BASE_URL=http://localhost:8000/v1
+LLM_API_KEY=your-key   # if required
+LLM_MODEL=your-model-name</code></pre>
+  </div>
+</details>
+</section>
+
+<!-- ************************************************************
+     DATABASE SETUP
+     ************************************************************ -->
+<section id="database-setup">
+<h2>Database Setup</h2>
+
+<div class="tabs" id="db-tabs">
+  <button class="tab-btn active" onclick="switchTab('db-tabs','db-pg')">PostgreSQL</button>
+  <button class="tab-btn" onclick="switchTab('db-tabs','db-libsql')">libSQL / Turso</button>
+</div>
+
+<div id="db-pg" class="tab-content active">
+  <h4>PostgreSQL Setup</h4>
+  <pre><code># Create database
+createdb ironclaw
+
+# Enable pgvector extension
+psql ironclaw -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# Configure
+export DATABASE_BACKEND=postgres
+export DATABASE_URL="postgres://localhost/ironclaw"</code></pre>
+  <p>Migrations run automatically on first start. PostgreSQL provides full vector search via pgvector for semantic memory queries.</p>
+</div>
+
+<div id="db-libsql" class="tab-content">
+  <h4>libSQL / Turso Setup</h4>
+  <pre><code># No setup needed! Just set the backend:
+export DATABASE_BACKEND=libsql
+
+# Database auto-created at ~/.ironclaw/ironclaw.db</code></pre>
+  <div class="callout success">
+    <strong>Zero-config option</strong>
+    libSQL requires no external server. The database is embedded and created automatically.
+    Uses FTS5 for text search (no vector search).
+  </div>
+</div>
+</section>
+
+<!-- ************************************************************
+     BOOTSTRAP CONFIG
+     ************************************************************ -->
+<section id="bootstrap-config">
+<h2>Bootstrap Configuration</h2>
+<p>The bootstrap config persists to <code>~/.ironclaw/bootstrap.json</code> and provides
+initial settings before the database is connected.</p>
+<pre><code>{
+  "database_url": "postgres://localhost/ironclaw",
+  "database_pool_size": 10,
+  "secrets_master_key_source": "Keychain",
+  "onboard_completed": true
+}</code></pre>
+</section>
+
+<!-- ************************************************************
+     CLI REFERENCE
+     ************************************************************ -->
+<section id="cli-reference">
+<h2>CLI Reference</h2>
+
+<table>
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>ironclaw run</code></td><td>Start interactive REPL (default)</td></tr>
+    <tr><td><code>ironclaw onboard</code></td><td>Interactive setup wizard</td></tr>
+    <tr><td><code>ironclaw doctor</code></td><td>System diagnostics</td></tr>
+    <tr><td><code>ironclaw status</code></td><td>System status overview</td></tr>
+    <tr><td><code>ironclaw config &lt;get|set&gt;</code></td><td>Read/write configuration</td></tr>
+    <tr><td><code>ironclaw memory &lt;cmd&gt;</code></td><td>search, read, write, tree, spaces, profile, connect</td></tr>
+    <tr><td><code>ironclaw tool &lt;cmd&gt;</code></td><td>WASM tool management</td></tr>
+    <tr><td><code>ironclaw mcp &lt;cmd&gt;</code></td><td>MCP server management</td></tr>
+    <tr><td><code>ironclaw gateway &lt;cmd&gt;</code></td><td>Web gateway start/stop/status</td></tr>
+    <tr><td><code>ironclaw sessions &lt;cmd&gt;</code></td><td>Session list/prune/clear</td></tr>
+    <tr><td><code>ironclaw hooks &lt;cmd&gt;</code></td><td>Lifecycle hook management</td></tr>
+    <tr><td><code>ironclaw cron &lt;cmd&gt;</code></td><td>Routine list/enable/disable/history</td></tr>
+    <tr><td><code>ironclaw channels &lt;cmd&gt;</code></td><td>Channel list/status/enable/disable</td></tr>
+    <tr><td><code>ironclaw plugins &lt;cmd&gt;</code></td><td>Plugin list/install/remove</td></tr>
+    <tr><td><code>ironclaw agents &lt;cmd&gt;</code></td><td>Agent identity management</td></tr>
+    <tr><td><code>ironclaw pairing &lt;cmd&gt;</code></td><td>DM pairing approval</td></tr>
+    <tr><td><code>ironclaw logs &lt;cmd&gt;</code></td><td>Log tail/search/filter</td></tr>
+    <tr><td><code>ironclaw message &lt;cmd&gt;</code></td><td>Send messages to channels</td></tr>
+    <tr><td><code>ironclaw webhooks &lt;cmd&gt;</code></td><td>Webhook list/add/remove/test</td></tr>
+    <tr><td><code>ironclaw skills &lt;cmd&gt;</code></td><td>Skill list/enable/disable</td></tr>
+    <tr><td><code>ironclaw nodes &lt;cmd&gt;</code></td><td>Device management</td></tr>
+    <tr><td><code>ironclaw browser &lt;cmd&gt;</code></td><td>Browser automation</td></tr>
+    <tr><td><code>ironclaw completion &lt;shell&gt;</code></td><td>Shell completion generation (bash, zsh, fish)</td></tr>
+    <tr><td><code>ironclaw service &lt;cmd&gt;</code></td><td>systemd/launchd service file generation</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ************************************************************
+     REPL MODE
+     ************************************************************ -->
+<section id="repl-mode">
+<h2>REPL Mode</h2>
+<p>The default mode provides an interactive chat interface. Inline commands start with <code>/</code>:</p>
+<table>
+  <thead><tr><th>Command</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><code>/help</code></td><td>Show available commands</td></tr>
+    <tr><td><code>/status</code></td><td>System status</td></tr>
+    <tr><td><code>/jobs</code></td><td>List active jobs</td></tr>
+    <tr><td><code>/cancel &lt;id&gt;</code></td><td>Cancel a job</td></tr>
+    <tr><td><code>/memory &lt;query&gt;</code></td><td>Search memory</td></tr>
+    <tr><td><code>/approve</code></td><td>Approve pending tool execution</td></tr>
+    <tr><td><code>/deny</code></td><td>Deny pending tool execution</td></tr>
+    <tr><td><code>/history</code></td><td>Show conversation history</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ************************************************************
+     WEB GATEWAY
+     ************************************************************ -->
+<section id="web-gateway">
+<h2>Web Gateway</h2>
+<p>Enable the browser-based UI with real-time streaming:</p>
+<pre><code>export GATEWAY_ENABLED=true
+export GATEWAY_PORT=3000
+export GATEWAY_AUTH_TOKEN=your-secure-token
+ironclaw gateway start</code></pre>
+
+<h3>Features</h3>
+<ul>
+  <li><strong>SSE + WebSocket streaming</strong> &mdash; Real-time response streaming</li>
+  <li><strong>Chat interface</strong> &mdash; Full conversation UI</li>
+  <li><strong>Memory browser</strong> &mdash; View and search workspace documents</li>
+  <li><strong>Job monitor</strong> &mdash; Track active and completed jobs</li>
+  <li><strong>Extension manager</strong> &mdash; Install and manage tools</li>
+  <li><strong>Canvas (A2UI)</strong> &mdash; Interactive artifacts</li>
+  <li><strong>Config editor</strong> &mdash; Modify settings in the browser</li>
+</ul>
+</section>
+
+<!-- ************************************************************
+     CHANNELS
+     ************************************************************ -->
+<section id="channels">
+<h2>Channels</h2>
+<p>IronClaw supports multiple input channels:</p>
+<table>
+  <thead><tr><th>Channel</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>REPL</td><td>Built-in</td><td>Interactive terminal chat</td></tr>
+    <tr><td>HTTP</td><td>Built-in</td><td>Webhook-based message handling</td></tr>
+    <tr><td>Web Gateway</td><td>Built-in</td><td>Browser UI with SSE/WebSocket</td></tr>
+    <tr><td>Telegram</td><td>WASM</td><td>Telegram bot integration</td></tr>
+    <tr><td>Slack</td><td>WASM</td><td>Slack bot integration</td></tr>
+    <tr><td>WhatsApp</td><td>WASM</td><td>WhatsApp Business API</td></tr>
+  </tbody>
+</table>
+<p>WASM channels are loaded at runtime from compiled <code>.wasm</code> components in <code>channels-src/</code>.</p>
+</section>
+
+<!-- ************************************************************
+     TOOLS
+     ************************************************************ -->
+<section id="tools">
+<h2>Tools &amp; Extensions</h2>
+
+<h3>Built-in Tools</h3>
+<table>
+  <thead><tr><th>Tool</th><th>Domain</th><th>Approval Required</th></tr></thead>
+  <tbody>
+    <tr><td><code>echo</code>, <code>time</code>, <code>json</code>, <code>http</code></td><td>Orchestrator</td><td>No (http: Yes)</td></tr>
+    <tr><td><code>shell</code>, <code>read_file</code>, <code>write_file</code>, <code>list_dir</code>, <code>apply_patch</code></td><td>Container</td><td>Yes</td></tr>
+    <tr><td><code>memory_search</code>, <code>memory_write</code>, <code>memory_read</code>, <code>memory_tree</code></td><td>Memory</td><td>No</td></tr>
+    <tr><td><code>create_job</code>, <code>list_jobs</code>, <code>job_status</code>, <code>cancel_job</code></td><td>Jobs</td><td>No</td></tr>
+    <tr><td><code>tool_search</code>, <code>tool_install</code>, <code>tool_auth</code>, <code>tool_list</code></td><td>Extensions</td><td>No</td></tr>
+    <tr><td><code>build_software</code></td><td>Builder</td><td>Yes</td></tr>
+    <tr><td><code>browser</code></td><td>Automation</td><td>No</td></tr>
+  </tbody>
+</table>
+
+<h3>WASM Tools</h3>
+<p>Nine pre-built WASM tools are available in <code>tools-src/</code>:</p>
+<p><code>gmail</code> &middot; <code>google-calendar</code> &middot; <code>google-docs</code> &middot;
+<code>google-drive</code> &middot; <code>google-sheets</code> &middot; <code>google-slides</code> &middot;
+<code>okta</code> &middot; <code>slack</code> &middot; <code>telegram</code></p>
+
+<h3>MCP Protocol</h3>
+<p>Connect to external Model Context Protocol servers for additional tool capabilities:</p>
+<pre><code>ironclaw mcp add my-server http://localhost:8080</code></pre>
+
+<h3>ClawHub Registry</h3>
+<p>Search, download, and install verified extensions:</p>
+<pre><code>ironclaw plugins search "gmail"
+ironclaw plugins install gmail-tool</code></pre>
+</section>
+
+<!-- ************************************************************
+     MEMORY
+     ************************************************************ -->
+<section id="memory">
+<h2>Memory &amp; Workspace</h2>
+<p>IronClaw provides persistent, searchable memory stored in the database.</p>
+
+<h3>Memory Operations</h3>
+<pre><code># Search memory
+ironclaw memory search "API design patterns"
+
+# Write a memory document
+ironclaw memory write /notes/project.md "Project notes here..."
+
+# Read a document
+ironclaw memory read /notes/project.md
+
+# Browse the memory tree
+ironclaw memory tree
+
+# Manage spaces
+ironclaw memory spaces list
+ironclaw memory spaces create "work-project"
+
+# View profile facts
+ironclaw memory profile list</code></pre>
+
+<h3>Identity Files</h3>
+<p>Special memory documents injected into every LLM system prompt:</p>
+<table>
+  <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>IDENTITY.md</code></td><td>Core personality and behavior</td></tr>
+    <tr><td><code>SOUL.md</code></td><td>Deep values and principles</td></tr>
+    <tr><td><code>AGENTS.md</code></td><td>Agent rules and policies</td></tr>
+    <tr><td><code>USER.md</code></td><td>User preferences and context</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Identity files are protected</strong>
+  Memory tools prevent overwriting identity files (IDENTITY.md, SOUL.md, AGENTS.md, USER.md)
+  through the safety layer with case-insensitive path matching.
+</div>
+
+<h3>Search Modes</h3>
+<ul>
+  <li><strong>FTS (Full-Text Search)</strong> &mdash; Keyword matching via PostgreSQL tsvector or libSQL FTS5</li>
+  <li><strong>Vector Search</strong> &mdash; Semantic similarity via embeddings (PostgreSQL only with pgvector)</li>
+  <li><strong>Hybrid</strong> &mdash; Reciprocal Rank Fusion combining both methods (default on PostgreSQL)</li>
+</ul>
+</section>
+
+<!-- ************************************************************
+     ROUTINES
+     ************************************************************ -->
+<section id="routines">
+<h2>Routines &amp; Cron</h2>
+<p>Schedule background tasks with cron expressions or event triggers:</p>
+<pre><code># List routines
+ironclaw cron list
+
+# Create a cron routine
+ironclaw cron create --name "daily-report" --schedule "0 9 * * *" --prompt "Generate daily summary"
+
+# View history
+ironclaw cron history daily-report
+
+# Enable/disable
+ironclaw cron enable daily-report
+ironclaw cron disable daily-report</code></pre>
+</section>
+
+<!-- ************************************************************
+     HOOKS
+     ************************************************************ -->
+<section id="hooks">
+<h2>Hooks System</h2>
+<p>Lifecycle hooks run at specific points in the message processing pipeline:</p>
+
+<table>
+  <thead><tr><th>Hook Type</th><th>Trigger Point</th></tr></thead>
+  <tbody>
+    <tr><td><code>BeforeInbound</code></td><td>Before processing incoming messages</td></tr>
+    <tr><td><code>BeforeOutbound</code></td><td>Before sending responses</td></tr>
+    <tr><td><code>BeforeToolCall</code></td><td>Before executing a tool</td></tr>
+    <tr><td><code>OnSessionStart</code></td><td>When a new session begins</td></tr>
+    <tr><td><code>OnSessionEnd</code></td><td>When a session ends</td></tr>
+    <tr><td><code>TransformResponse</code></td><td>Transform response before delivery</td></tr>
+    <tr><td><code>TranscribeAudio</code></td><td>Audio transcription hook</td></tr>
+  </tbody>
+</table>
+
+<h3>Bundled Hooks</h3>
+<p>8 pre-built hooks: <code>profanity_filter</code>, <code>rate_limit_guard</code>,
+<code>sensitive_data_redactor</code>, and more.</p>
+
+<pre><code># List hooks
+ironclaw hooks list
+
+# Enable a bundled hook
+ironclaw hooks enable profanity_filter</code></pre>
+
+<h3>Hook Outcomes</h3>
+<ul>
+  <li><strong>Continue</strong> &mdash; Proceed normally</li>
+  <li><strong>Modified(data)</strong> &mdash; Continue with modified data</li>
+  <li><strong>Block { reason }</strong> &mdash; Stop processing</li>
+  <li><strong>Error { message }</strong> &mdash; Report an error</li>
+</ul>
+</section>
+
+<!-- ************************************************************
+     JOBS
+     ************************************************************ -->
+<section id="jobs">
+<h2>Job System</h2>
+<p>IronClaw processes work as jobs with a well-defined state machine:</p>
+<div class="diagram">Pending ──&gt; InProgress ──&gt; Completed ──&gt; Submitted ──&gt; Accepted
+   │            │                                          (terminal)
+   │            ├──&gt; Failed (terminal)
+   │            └──&gt; Stuck ──&gt; InProgress (self-repair)
+   │
+   └──&gt; Cancelled (terminal)</div>
+
+<h3>Job States</h3>
+<table>
+  <thead><tr><th>State</th><th>Description</th><th>Terminal</th></tr></thead>
+  <tbody>
+    <tr><td>Pending</td><td>Queued, waiting for execution</td><td>No</td></tr>
+    <tr><td>InProgress</td><td>Currently executing</td><td>No</td></tr>
+    <tr><td>Completed</td><td>Work finished, awaiting review</td><td>No</td></tr>
+    <tr><td>Submitted</td><td>Submitted for review</td><td>No</td></tr>
+    <tr><td>Accepted</td><td>Approved and finished</td><td>Yes</td></tr>
+    <tr><td>Failed</td><td>Execution failed</td><td>Yes</td></tr>
+    <tr><td>Cancelled</td><td>Cancelled by user</td><td>Yes</td></tr>
+    <tr><td>Stuck</td><td>Detected as hung (auto-recovered)</td><td>No</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ************************************************************
+     SECURITY
+     ************************************************************ -->
+<section id="security">
+<h2>Security Overview</h2>
+<p>IronClaw implements defense in depth with multiple security layers:</p>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+  <div class="card">
+    <h4>WASM Sandbox</h4>
+    <p style="font-size:.85rem;">Capability-based permissions, endpoint allowlisting, credential injection</p>
+  </div>
+  <div class="card">
+    <h4>Prompt Injection Defense</h4>
+    <p style="font-size:.85rem;">Unicode normalization, entity decoding, pattern detection, content sanitization</p>
+  </div>
+  <div class="card">
+    <h4>Leak Detection</h4>
+    <p style="font-size:.85rem;">Secret exfiltration scanning, URL encoding detection, hex pattern matching</p>
+  </div>
+  <div class="card">
+    <h4>Log Redaction</h4>
+    <p style="font-size:.85rem;">Auto-redact API keys, Bearer tokens, JWTs, DB strings, GitHub tokens</p>
+  </div>
+  <div class="card">
+    <h4>Binary Allowlist</h4>
+    <p style="font-size:.85rem;">Only curated POSIX utilities permitted for execution</p>
+  </div>
+  <div class="card">
+    <h4>Credential Protection</h4>
+    <p style="font-size:.85rem;">AES-256-GCM vault, SecretString, automatic memory zeroing</p>
+  </div>
+</div>
+</section>
+
+<section id="safety-layer">
+<h2>Safety Layer</h2>
+<p>All external tool output passes through the safety pipeline:</p>
+<div class="diagram">Tool Output ──&gt; Sanitizer ──&gt; Validator ──&gt; Policy ──&gt; XML Wrap ──&gt; LLM</div>
+
+<h3>Sanitizer</h3>
+<ul>
+  <li>HTML entity decoding (<code>&amp;#115;ystem:</code> &rarr; <code>system:</code>)</li>
+  <li>Invisible character stripping (zero-width, RTL marks)</li>
+  <li>Homoglyph normalization (Cyrillic/Greek lookalikes)</li>
+  <li>Injection pattern detection</li>
+</ul>
+
+<h3>Policy Enforcement</h3>
+<ul>
+  <li><strong>Block</strong> &mdash; Prevent execution entirely</li>
+  <li><strong>Warn</strong> &mdash; Log and continue</li>
+  <li><strong>Review</strong> &mdash; Require human approval</li>
+  <li><strong>Sanitize</strong> &mdash; Clean and continue</li>
+</ul>
+
+<h3>Path Traversal Protection</h3>
+<p>Detects URL-encoded (<code>%2e%2e</code>), double-encoded (<code>%252e%252e</code>),
+and backslash (<code>..\</code>) traversal variants.</p>
+</section>
+
+<section id="wasm-sandbox">
+<h2>WASM Sandbox</h2>
+<div class="diagram">WASM ──&gt; Allowlist ──&gt; Leak Scan ──&gt; Credential ──&gt; Execute ──&gt; Leak Scan ──&gt; WASM
+         Validator     (request)     Injector       Request     (response)</div>
+<ul>
+  <li><strong>Capability-based permissions</strong> &mdash; Explicit opt-in for HTTP, secrets, tool invocation</li>
+  <li><strong>Endpoint allowlisting</strong> &mdash; HTTP requests only to approved hosts/paths</li>
+  <li><strong>Credential injection</strong> &mdash; Secrets injected at host boundary, never exposed to WASM</li>
+  <li><strong>Approval gate</strong> &mdash; Tools requiring approval cannot be invoked from WASM</li>
+  <li><strong>Resource limits</strong> &mdash; Memory, CPU, and execution time constraints</li>
+</ul>
+</section>
+
+<section id="credentials">
+<h2>Credential Management</h2>
+<p>Secrets are encrypted with AES-256-GCM and stored in an encrypted vault:</p>
+<ul>
+  <li><strong>System keychain</strong> &mdash; Master key stored in macOS Keychain or Linux GNOME Keyring/KWallet</li>
+  <li><strong>SecretString</strong> &mdash; All tokens use <code>SecretString</code> with automatic memory zeroing</li>
+  <li><strong>OsRng</strong> &mdash; Cryptographically secure random values for all tokens</li>
+  <li><strong>Constant-time comparison</strong> &mdash; Prevents timing attacks on token verification</li>
+  <li><strong>OAuth 2.0/2.1</strong> &mdash; PKCE S256 support with protected verifiers</li>
+</ul>
+</section>
+
+<section id="elevated-mode">
+<h2>Elevated Mode</h2>
+<p>Session-bound privileged execution for operations requiring extra permissions:</p>
+<pre><code># Elevated mode is session-bound with duration clamping
+# Duration: minimum 60 seconds, maximum 8 hours
+# Requires user_id and session_id for activation
+# Full audit trail maintained</code></pre>
+<div class="callout warn">
+  <strong>Scoped to session</strong>
+  Elevated mode is bound to a specific session. <code>is_active_for_session()</code> enforces scope
+  so elevated privileges cannot leak to other sessions.
+</div>
+</section>
+
+<section id="access-control">
+<h2>Access Control</h2>
+<p>Allowlist/blocklist ACL system with glob pattern matching:</p>
+<ul>
+  <li><strong>AllowAll</strong> &mdash; Everything permitted (default)</li>
+  <li><strong>Allowlist</strong> &mdash; Only explicitly allowed items permitted</li>
+  <li><strong>Blocklist</strong> &mdash; Everything except blocked items permitted</li>
+</ul>
+<p>Group policies allow per-group tool allow/deny/require-approval rules.</p>
+</section>
+
+<!-- ************************************************************
+     ARCHITECTURE
+     ************************************************************ -->
+<section id="architecture">
+<h2>System Architecture</h2>
+<div class="diagram">
+Channels (REPL, HTTP, WASM, Web Gateway)
+    &#x2192; ChannelManager (merges all input streams)
+    &#x2192; Agent Loop (submission parsing, session resolution)
+    &#x2192; Router (intent classification)
+    &#x2192; Scheduler (parallel job dispatch)
+    &#x2192; Worker (LLM reasoning + tool execution loop)
+    &#x2192; Safety Layer (sanitize tool outputs)
+    &#x2192; Response back through channel</div>
+
+<h3>Core Components</h3>
+<table>
+  <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>Agent Loop</td><td>Main message handling, multi-agent routing, job coordination</td></tr>
+    <tr><td>Router</td><td>Classifies user intent (command, query, task)</td></tr>
+    <tr><td>Scheduler</td><td>Parallel job execution with priorities</td></tr>
+    <tr><td>Worker</td><td>LLM reasoning and tool call execution</td></tr>
+    <tr><td>Orchestrator</td><td>Container lifecycle, LLM proxying, per-job auth</td></tr>
+    <tr><td>Safety Layer</td><td>Prompt injection defense, leak detection, redaction</td></tr>
+    <tr><td>Workspace</td><td>Persistent memory with hybrid search</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="job-execution">
+<h2>Job Execution Models</h2>
+<table>
+  <thead><tr><th>Model</th><th>Description</th><th>Use Case</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Local</strong></td><td>Worker runs in-process with direct tool access</td><td>Default, fastest</td></tr>
+    <tr><td><strong>Sandboxed</strong></td><td>Docker container with <code>ironclaw worker</code></td><td>Untrusted operations</td></tr>
+    <tr><td><strong>Claude Code</strong></td><td>Docker container with <code>ironclaw claude-bridge</code></td><td>Claude CLI delegation</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="dual-database">
+<h2>Dual Database Backend</h2>
+<table>
+  <thead><tr><th>Feature</th><th>PostgreSQL</th><th>libSQL</th></tr></thead>
+  <tbody>
+    <tr><td>Setup</td><td>Requires server</td><td>Embedded, zero-config</td></tr>
+    <tr><td>Text Search</td><td>tsvector (full)</td><td>FTS5</td></tr>
+    <tr><td>Vector Search</td><td>pgvector</td><td>Not available</td></tr>
+    <tr><td>Hybrid Search</td><td>RRF (FTS + vector)</td><td>FTS only</td></tr>
+    <tr><td>UUID</td><td>Native UUID type</td><td>TEXT</td></tr>
+    <tr><td>Timestamps</td><td>TIMESTAMPTZ</td><td>TEXT (ISO-8601)</td></tr>
+    <tr><td>JSON</td><td>JSONB</td><td>TEXT</td></tr>
+    <tr><td>Best For</td><td>Production deployments</td><td>Edge/embedded, dev</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ************************************************************
+     MAINTENANCE
+     ************************************************************ -->
+<section id="maintenance">
+<h2>Maintenance Overview</h2>
+<p>IronClaw includes built-in systems for monitoring, recovery, and maintenance.</p>
+</section>
+
+<section id="health-checks">
+<h2>Health Checks</h2>
+<pre><code># Run comprehensive diagnostics
+ironclaw doctor
+
+# Check system status
+ironclaw status
+
+# View gateway status
+ironclaw gateway status</code></pre>
+<p>The <code>doctor</code> command checks:</p>
+<ul>
+  <li>Database connectivity and migration status</li>
+  <li>LLM provider availability</li>
+  <li>WASM tool loading</li>
+  <li>Channel connectivity</li>
+  <li>Disk space and resource usage</li>
+</ul>
+</section>
+
+<section id="backup-restore">
+<h2>Backup &amp; Restore</h2>
+<h3>PostgreSQL</h3>
+<pre><code># Backup
+pg_dump ironclaw &gt; ironclaw_backup.sql
+
+# Restore
+psql ironclaw &lt; ironclaw_backup.sql</code></pre>
+
+<h3>libSQL</h3>
+<pre><code># Backup (just copy the file)
+cp ~/.ironclaw/ironclaw.db ~/.ironclaw/ironclaw.db.bak
+
+# Restore
+cp ~/.ironclaw/ironclaw.db.bak ~/.ironclaw/ironclaw.db</code></pre>
+
+<h3>Configuration Backup</h3>
+<pre><code># Backup bootstrap config and identity files
+tar czf ironclaw-config.tar.gz \
+  ~/.ironclaw/bootstrap.json \
+  ~/.ironclaw/tools/ \
+  ~/.ironclaw/settings.json</code></pre>
+</section>
+
+<section id="self-repair">
+<h2>Self-Repair System</h2>
+<p>IronClaw automatically detects and recovers from stuck operations:</p>
+<ul>
+  <li><strong>Stuck job detection</strong> &mdash; Jobs exceeding <code>AGENT_STUCK_THRESHOLD_SECS</code> are flagged</li>
+  <li><strong>Automatic recovery</strong> &mdash; Stuck jobs transition back to InProgress for retry</li>
+  <li><strong>Broken tool detection</strong> &mdash; Tools with repeated failures are flagged and quarantined</li>
+  <li><strong>Max attempts</strong> &mdash; Configurable via <code>SELF_REPAIR_MAX_ATTEMPTS</code></li>
+  <li><strong>Check interval</strong> &mdash; Configurable via <code>SELF_REPAIR_CHECK_INTERVAL_SECS</code></li>
+</ul>
+</section>
+
+<section id="session-management">
+<h2>Session Management</h2>
+<pre><code># List active sessions
+ironclaw sessions list
+
+# Prune expired sessions
+ironclaw sessions prune
+
+# Prune with custom idle threshold
+ironclaw sessions prune --max-idle 7200
+
+# Clear all sessions (use with caution)
+ironclaw sessions clear --force</code></pre>
+</section>
+
+<section id="log-management">
+<h2>Log Management</h2>
+<pre><code># View logs
+ironclaw logs tail
+
+# Search logs
+ironclaw logs search "error"
+
+# Filter by level
+ironclaw logs tail --level error
+
+# Debug logging
+RUST_LOG=ironclaw=debug ironclaw run
+RUST_LOG=ironclaw::agent=debug ironclaw run</code></pre>
+
+<div class="callout">
+  <strong>Automatic Log Redaction</strong>
+  Sensitive data is automatically redacted from logs: API keys, Bearer tokens, JWTs,
+  AWS credentials, database connection strings, GitHub tokens, Slack tokens, and more.
+</div>
+</section>
+
+<section id="upgrading">
+<h2>Upgrading</h2>
+<h3>Binary Update</h3>
+<pre><code># Re-run the installer (auto-detects existing installation)
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.sh | sh
+
+# Or rebuild from source
+git pull
+cargo build --release</code></pre>
+
+<h3>Database Migrations</h3>
+<p>Migrations run automatically on startup. For PostgreSQL, migrations are in <code>migrations/V1-V9</code>.
+For libSQL, migrations are embedded in <code>src/db/libsql_migrations.rs</code>.</p>
+
+<div class="callout warn">
+  <strong>Always backup before upgrading</strong>
+  Database migrations are forward-only. Backup your database before upgrading to a new version.
+</div>
+</section>
+
+<section id="troubleshooting">
+<h2>Troubleshooting</h2>
+
+<details>
+  <summary>Database connection fails</summary>
+  <div>
+    <ol>
+      <li>Verify PostgreSQL is running: <code>pg_isready</code></li>
+      <li>Check <code>DATABASE_URL</code> is set correctly</li>
+      <li>Ensure pgvector extension is installed: <code>psql -c "SELECT * FROM pg_extension WHERE extname='vector'"</code></li>
+      <li>For libSQL, check <code>~/.ironclaw/ironclaw.db</code> exists and is writable</li>
+    </ol>
+  </div>
+</details>
+
+<details>
+  <summary>LLM provider returns errors</summary>
+  <div>
+    <ol>
+      <li>Verify API key is correct: <code>ironclaw config get LLM_BACKEND</code></li>
+      <li>Check rate limits with your provider</li>
+      <li>Enable debug logging: <code>RUST_LOG=ironclaw::llm=debug</code></li>
+      <li>Test with a simple prompt first</li>
+    </ol>
+  </div>
+</details>
+
+<details>
+  <summary>WASM tools fail to load</summary>
+  <div>
+    <ol>
+      <li>Rebuild WASM tools: <code>cargo build --target wasm32-wasip2 --release</code></li>
+      <li>Check <code>~/.ironclaw/tools/</code> for compiled <code>.wasm</code> files</li>
+      <li>Verify <code>capabilities.json</code> is valid JSON</li>
+      <li>Check logs for WASM-specific errors</li>
+    </ol>
+  </div>
+</details>
+
+<details>
+  <summary>Web gateway not accessible</summary>
+  <div>
+    <ol>
+      <li>Verify <code>GATEWAY_ENABLED=true</code></li>
+      <li>Check port availability: <code>ss -tlnp | grep 3000</code></li>
+      <li>Ensure <code>GATEWAY_AUTH_TOKEN</code> is set</li>
+      <li>Check firewall rules for the gateway port</li>
+    </ol>
+  </div>
+</details>
+
+<details>
+  <summary>Jobs stuck in InProgress state</summary>
+  <div>
+    <ol>
+      <li>The self-repair system should auto-recover stuck jobs</li>
+      <li>Check <code>AGENT_STUCK_THRESHOLD_SECS</code> (default varies)</li>
+      <li>View stuck jobs: <code>ironclaw status</code></li>
+      <li>Manually cancel: <code>/cancel &lt;job-id&gt;</code></li>
+    </ol>
+  </div>
+</details>
+
+<details>
+  <summary>Memory search returns no results</summary>
+  <div>
+    <ol>
+      <li>Verify documents exist: <code>ironclaw memory tree</code></li>
+      <li>Check embedding processing: chunks without embeddings are queued for batch processing</li>
+      <li>For libSQL, only FTS is available (no vector search)</li>
+      <li>Try broader search terms</li>
+    </ol>
+  </div>
+</details>
+</section>
+
+<!-- ************************************************************
+     DEVELOPMENT
+     ************************************************************ -->
+<section id="building">
+<h2>Building from Source</h2>
+<pre><code># Format code
+cargo fmt
+
+# Lint (fix all warnings before committing)
+cargo clippy --all --benches --tests --examples --all-features
+
+# Build (PostgreSQL backend, default)
+cargo build --release
+
+# Build (libSQL backend)
+cargo build --release --no-default-features --features libsql
+
+# Build (both backends)
+cargo build --release --features "postgres,libsql"
+
+# Build WASM tools
+cargo build --target wasm32-wasip2 --release</code></pre>
+</section>
+
+<section id="testing">
+<h2>Testing</h2>
+<p>IronClaw has ~1,840 unit tests, 133 user journey integration tests, and 53 additional integration tests.</p>
+<pre><code># Run all tests
+cargo test
+
+# Run specific test module
+cargo test safety::sanitizer::tests
+cargo test context::state::tests
+
+# Run user journey integration tests
+cargo test --test user_journey_integration
+
+# Run with libSQL backend
+cargo test --no-default-features --features libsql
+
+# Run with debug output
+RUST_LOG=ironclaw=debug cargo test test_name -- --nocapture</code></pre>
+
+<h3>Test Coverage by Module</h3>
+<div class="progress-bar"><div class="fill" style="width:100%"></div></div>
+<p style="font-size:.85rem;"><strong>Safety</strong>: 100% file coverage &mdash; Leak detection, redaction, policies</p>
+
+<div class="progress-bar"><div class="fill" style="width:95%"></div></div>
+<p style="font-size:.85rem;"><strong>Agent</strong>: 95% file coverage &mdash; Command queue, session mgmt, routing</p>
+
+<div class="progress-bar"><div class="fill" style="width:78%"></div></div>
+<p style="font-size:.85rem;"><strong>Channels</strong>: 78% file coverage &mdash; WASM routing, web gateway, inline commands</p>
+
+<div class="progress-bar"><div class="fill" style="width:71%"></div></div>
+<p style="font-size:.85rem;"><strong>Tools</strong>: 71% file coverage &mdash; Browser, MCP client, WASM hosting</p>
+</section>
+
+<section id="adding-tools">
+<h2>Adding Tools</h2>
+
+<h3>Built-in Rust Tool</h3>
+<ol>
+  <li>Create <code>src/tools/builtin/my_tool.rs</code> implementing the <code>Tool</code> trait</li>
+  <li>Add <code>mod my_tool;</code> and <code>pub use</code> in <code>src/tools/builtin/mod.rs</code></li>
+  <li>Register in the appropriate phase in <code>ToolRegistry</code> (<code>registry.rs</code>)</li>
+</ol>
+
+<h3>WASM Tool</h3>
+<ol>
+  <li>Create crate in <code>tools-src/&lt;name&gt;/</code></li>
+  <li>Implement WIT interface (<code>wit/tool.wit</code>)</li>
+  <li>Create <code>&lt;name&gt;.capabilities.json</code> for permissions and auth</li>
+  <li>Build: <code>cargo build --target wasm32-wasip2 --release</code></li>
+</ol>
+</section>
+
+<section id="adding-channels">
+<h2>Adding Channels</h2>
+
+<h3>Built-in Channel</h3>
+<ol>
+  <li>Create <code>src/channels/my_channel.rs</code> implementing the <code>Channel</code> trait</li>
+  <li>Add config fields in <code>src/config.rs</code></li>
+  <li>Wire up in <code>main.rs</code> channel setup section</li>
+</ol>
+
+<h3>WASM Channel</h3>
+<ol>
+  <li>Create crate in <code>channels-src/&lt;name&gt;/</code></li>
+  <li>Implement WIT interface (<code>wit/channel.wit</code>)</li>
+  <li>Create <code>&lt;name&gt;.capabilities.json</code></li>
+  <li>Build: <code>cargo build --target wasm32-wasip2 --release</code></li>
+</ol>
+</section>
+
+<!-- Footer -->
+<section style="text-align:center; border-top:1px solid var(--border); padding-top:24px; margin-top:48px;">
+  <p style="color:var(--text-muted); font-size:.85rem;">
+    IronClaw User Guide &amp; Maintenance Manual<br>
+    Licensed under Apache-2.0 / MIT &middot;
+    <a href="https://github.com/danielsimonjr/ironclaw">GitHub</a>
+  </p>
+</section>
+
+</main>
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+// Tab switching
+function switchTab(tabGroupId, tabContentId) {
+  const group = document.getElementById(tabGroupId);
+  const btns = group.querySelectorAll('.tab-btn');
+  let contents = [];
+  let el = group.nextElementSibling;
+  while (el && el.classList.contains('tab-content')) {
+    contents.push(el);
+    el = el.nextElementSibling;
+  }
+  btns.forEach((b, i) => {
+    b.classList.toggle('active', contents[i] && contents[i].id === tabContentId);
+  });
+  contents.forEach(c => {
+    c.classList.toggle('active', c.id === tabContentId);
+  });
+}
+
+// Sidebar active link tracking
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      document.querySelectorAll('aside a').forEach(a => a.classList.remove('active'));
+      const link = document.querySelector(`aside a[href="#${entry.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-80px 0px -70% 0px' });
+
+document.querySelectorAll('section[id]').forEach(s => observer.observe(s));
+
+// Sidebar search filter
+function filterSidebar(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll('aside a').forEach(a => {
+    a.style.display = !q || a.textContent.toLowerCase().includes(q) ? 'block' : 'none';
+  });
+  document.querySelectorAll('aside h3').forEach(h => {
+    let next = h.nextElementSibling;
+    let anyVisible = false;
+    while (next && next.tagName === 'A') {
+      if (next.style.display !== 'none') anyVisible = true;
+      next = next.nextElementSibling;
+    }
+    h.style.display = !q || anyVisible ? 'block' : 'none';
+  });
+}
+
+// Copy buttons for code blocks
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  btn.onclick = () => {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  };
+  pre.appendChild(btn);
+});
+
+// Close sidebar on mobile when clicking a link
+document.querySelectorAll('aside a').forEach(a => {
+  a.addEventListener('click', () => {
+    if (window.innerWidth <= 900) {
+      document.querySelector('aside').classList.remove('open');
+    }
+  });
+});
+</script>
+</body>
+</html>

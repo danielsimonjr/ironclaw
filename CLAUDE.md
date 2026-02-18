@@ -235,7 +235,8 @@ ironclaw/
 ├── migrations/             # PostgreSQL schema (V1–V9)
 ├── docs/                   # Additional documentation
 │   ├── BUILDING_CHANNELS.md
-│   └── TELEGRAM_SETUP.md
+│   ├── TELEGRAM_SETUP.md
+│   └── user-guide.html     # Interactive single-page User Guide & Maintenance Manual
 ├── deploy/                 # Deployment configs (systemd, setup scripts, GCP, Windows installer)
 │   ├── cloud-sql-proxy.service
 │   ├── ironclaw.service
@@ -391,7 +392,7 @@ Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-a
 
 ### Test Coverage
 
-~1,840 unit tests across ~190 tested files (out of 247 total `.rs` files), plus 53 integration tests. Key coverage areas:
+~1,840 unit tests across ~190 tested files (out of 247 total `.rs` files), 133 user journey integration tests (`tests/user_journey_integration.rs`), plus 53 additional integration tests. Key coverage areas:
 
 | Module | Coverage | Notes |
 |--------|----------|-------|

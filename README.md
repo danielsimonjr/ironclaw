@@ -400,7 +400,7 @@ cargo build --no-default-features --features libsql
 
 ### Testing
 
-IronClaw has ~1,840 unit tests across ~190 source files, plus 53 integration tests. Tests cover safety layers, agent logic, channel routing, tool execution, configuration parsing, state machine transitions, memory security, search algorithms, and security hardening.
+IronClaw has ~1,840 unit tests across ~190 source files, 133 user journey integration tests, and 53 additional integration tests. Tests cover safety layers, agent logic, channel routing, tool execution, configuration parsing, state machine transitions, memory security, search algorithms, and security hardening.
 
 ```bash
 # Run all tests (default features)
@@ -417,6 +417,7 @@ cargo test estimation::learner::tests
 
 See [TEST_COVERAGE_ANALYSIS.md](TEST_COVERAGE_ANALYSIS.md) for coverage details and [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for security review.
 
+- **User Guide**: See [docs/user-guide.html](docs/user-guide.html) for the interactive User Guide & Maintenance Manual.
 - **Telegram channel**: See [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md) for setup and DM pairing.
 - **Building channels**: See [docs/BUILDING_CHANNELS.md](docs/BUILDING_CHANNELS.md) for WASM channel development.
 - **Changing channel sources**: Run `./channels-src/telegram/build.sh` before `cargo build` so the updated WASM is bundled.

@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **User journey integration tests** — 133 comprehensive tests across 21 modules covering end-to-end user flows without external dependencies (no DB, LLM, or Docker):
+  - Bootstrap & configuration (7 tests): fresh install defaults, save/reload persistence, missing file graceful handling, default path resolution, environment variable overrides
+  - Session & thread lifecycle (8 tests): session creation, multi-session isolation, thread state machine, turn tracking, auto-approval, tool approval scoping
+  - Job state machine (14 tests): full happy-path lifecycle (Pending→InProgress→Completed→Submitted→Accepted), failure paths, cancellation, stuck recovery, terminal state validation, transition tracking, active/terminal complementarity, display names
+  - Safety layer (10 tests): input validation, prompt injection detection, oversized output truncation, XML wrapping for LLM context, special character escaping, policy enforcement, disabled-check bypass for critical patterns
+  - Leak detection (4 tests): clean content passthrough, secret pattern detection, scan-and-clean pipeline
+  - Log redaction (6 tests): bearer token redaction, API key redaction, database URL redaction, multi-secret redaction, clean text passthrough
+  - Message routing (6 tests): command detection, intent classification, natural language routing
+  - Inline commands (9 tests): help/status/jobs parsing, argument extraction, unknown command handling, custom prefix configuration, empty input
+  - Channel messages (5 tests): incoming message construction, outgoing response creation, status update types
+  - Tool system (7 tests): tool output construction (success/error/text/cost), registry creation, builtin tool registration, echo tool execution
+  - Hook system (8 tests): hook type variants, context construction, outcome variants (Continue/Modified/Block/Error), serialization roundtrip, all 7 hook types
+  - Pairing flow (7 tests): challenge code generation, format validation, uniqueness, case-insensitive matching
+  - WASM channel routing (2 tests): route pattern matching
+  - Config validation (2 tests): safety config defaults, injection check enabled by default
+  - Error types (7 tests): display formatting for ConfigError, LlmError, ChannelError, SafetyError, ToolError, JobError; error wrapping
+  - Elevated mode (3 tests): inactive by default, activate/deactivate cycle, session binding
+  - Binary allowlist (3 tests): enforced by default, standard utilities allowed, unknown binaries rejected
+  - Access control (4 tests): allow-all mode, allowlist mode, blocklist mode, rule matching
+  - Workspace types (5 tests): connection types, profile types, search config defaults, FTS-only mode
+  - CLI parsing (12 tests): run/onboard/doctor/config/status/memory/tool/gateway/hooks/cron/completion commands
+  - OpenAI compat API (3 tests): chat completions, model listing, auth enforcement
+
+- **Single-page HTML5 User Guide and Maintenance Manual** (`docs/user-guide.html`):
+  - Interactive sidebar navigation with search filtering and scroll tracking
+  - Tabbed installation instructions (shell, PowerShell, source, MSI)
+  - Complete CLI reference, environment variable tables, LLM provider configuration
+  - Security documentation: safety layer pipeline, WASM sandbox, credential management, elevated mode, access control
+  - Architecture diagrams: system flow, job state machine, database comparison
+  - Maintenance procedures: health checks, backup/restore, self-repair, session management, log management, upgrading
+  - Troubleshooting guide with expandable sections for common issues
+  - Development guide: building, testing, adding tools and channels
+  - Dark theme, responsive design, copy-to-clipboard for code blocks
+
 - **Comprehensive test coverage expansion** — ~145 new unit tests across 6 priority modules identified by test coverage analysis:
   - Database layer (20 tests): `parse_timestamp` format handling (RFC 3339, naive with/without fractional seconds), `fmt_ts` roundtrip, `parse_job_state` all 8 variants + unknown fallback, `opt_text`/`opt_text_owned` NULL semantics, `fmt_opt_ts` optional DateTime conversion
   - Configuration system (35 tests): `DatabaseBackend::from_str` (postgres/libsql variants, case insensitivity), `LlmBackend::from_str` (all 8 providers + aliases), `NearAiApiMode::from_str`, Display↔FromStr roundtrip, `optional_env` empty-string-as-None, `parse_optional_env` type parsing with defaults, path helper validation
