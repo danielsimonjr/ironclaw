@@ -354,3 +354,92 @@ impl Channel for GatewayChannel {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> GatewayConfig {
+        GatewayConfig {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            auth_token: Some("test-token-123".to_string()),
+            user_id: "test-user".to_string(),
+        }
+    }
+
+    fn test_config_no_token() -> GatewayConfig {
+        GatewayConfig {
+            host: "0.0.0.0".to_string(),
+            port: 3000,
+            auth_token: None,
+            user_id: "user1".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_gateway_channel_new_with_token() {
+        let ch = GatewayChannel::new(test_config());
+        assert_eq!(ch.auth_token(), "test-token-123");
+        assert_eq!(ch.name(), "gateway");
+    }
+
+    #[test]
+    fn test_gateway_channel_auto_generates_token() {
+        let ch = GatewayChannel::new(test_config_no_token());
+        // Should generate a 32-char alphanumeric token
+        assert_eq!(ch.auth_token().len(), 32);
+        assert!(ch.auth_token().chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn test_gateway_channel_name() {
+        let ch = GatewayChannel::new(test_config());
+        assert_eq!(ch.name(), "gateway");
+    }
+
+    #[test]
+    fn test_gateway_state_initial() {
+        let ch = GatewayChannel::new(test_config());
+        let state = ch.state();
+        assert!(state.workspace.is_none());
+        assert!(state.session_manager.is_none());
+        assert!(state.log_broadcaster.is_none());
+        assert!(state.extension_manager.is_none());
+        assert!(state.tool_registry.is_none());
+        assert!(state.store.is_none());
+        assert!(state.job_manager.is_none());
+        assert!(state.prompt_queue.is_none());
+        assert!(state.llm_provider.is_none());
+        assert!(state.ws_tracker.is_some());
+    }
+
+    #[test]
+    fn test_gateway_config_user_id_propagated() {
+        let ch = GatewayChannel::new(test_config());
+        assert_eq!(ch.state().user_id, "test-user");
+    }
+
+    #[tokio::test]
+    async fn test_health_check_before_start() {
+        let ch = GatewayChannel::new(test_config());
+        // Before start, msg_tx is None, so health check should fail
+        let result = ch.health_check().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_before_start() {
+        let ch = GatewayChannel::new(test_config());
+        // Should not panic when shutting down before start
+        let result = ch.shutdown().await;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_auto_generated_tokens_are_unique() {
+        let ch1 = GatewayChannel::new(test_config_no_token());
+        let ch2 = GatewayChannel::new(test_config_no_token());
+        assert_ne!(ch1.auth_token(), ch2.auth_token());
+    }
+}

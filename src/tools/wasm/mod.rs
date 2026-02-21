@@ -128,3 +128,128 @@ pub use capabilities_schema::{
     AuthCapabilitySchema, CapabilitiesFile, OAuthConfigSchema, RateLimitSchema,
     ValidationEndpointSchema,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_fuel_limit() {
+        assert!(DEFAULT_FUEL_LIMIT > 0);
+    }
+
+    #[test]
+    fn test_default_memory_limit() {
+        assert!(DEFAULT_MEMORY_LIMIT > 0);
+    }
+
+    #[test]
+    fn test_default_timeout() {
+        assert!(DEFAULT_TIMEOUT > std::time::Duration::ZERO);
+    }
+
+    #[test]
+    fn test_wasm_runtime_config_default() {
+        let config = WasmRuntimeConfig::default();
+        // Should have sensible defaults
+        assert!(config.default_limits.fuel > 0);
+        assert!(config.default_limits.memory_bytes > 0);
+        assert!(config.cache_compiled);
+    }
+
+    #[test]
+    fn test_capabilities_none() {
+        let caps = Capabilities::none();
+        assert!(caps.http.is_none());
+        assert!(caps.workspace_read.is_none());
+        assert!(caps.secrets.is_none());
+        assert!(caps.tool_invoke.is_none());
+    }
+
+    #[test]
+    fn test_endpoint_pattern_host() {
+        let pattern = EndpointPattern::host("api.example.com");
+        assert_eq!(pattern.host, "api.example.com");
+    }
+
+    #[test]
+    fn test_endpoint_pattern_with_path_prefix() {
+        let pattern = EndpointPattern::host("api.example.com").with_path_prefix("/v1/");
+        assert_eq!(pattern.host, "api.example.com");
+        assert_eq!(pattern.path_prefix.as_deref(), Some("/v1/"));
+    }
+
+    #[test]
+    fn test_http_capability_new() {
+        let cap = HttpCapability::new(vec![
+            EndpointPattern::host("api.openai.com"),
+        ]);
+        assert_eq!(cap.allowlist.len(), 1);
+    }
+
+    #[test]
+    fn test_capabilities_with_http() {
+        let caps = Capabilities::none().with_http(HttpCapability::new(vec![
+            EndpointPattern::host("example.com"),
+        ]));
+        assert!(caps.http.is_some());
+        assert_eq!(caps.http.unwrap().allowlist.len(), 1);
+    }
+
+    #[test]
+    fn test_log_level_variants() {
+        // Verify log levels can be constructed
+        let _debug = LogLevel::Debug;
+        let _info = LogLevel::Info;
+        let _warn = LogLevel::Warn;
+        let _error = LogLevel::Error;
+    }
+
+    #[test]
+    fn test_resource_limits_default() {
+        let limits = ResourceLimits::default();
+        assert!(limits.fuel > 0);
+        assert!(limits.memory_bytes > 0);
+    }
+
+    #[test]
+    fn test_allowlist_validator_creation() {
+        let validator = AllowlistValidator::new(vec![
+            EndpointPattern::host("api.example.com"),
+        ]);
+        // Should not panic
+        drop(validator);
+    }
+
+    #[test]
+    fn test_tool_status_variants() {
+        let _active = ToolStatus::Active;
+        let _disabled = ToolStatus::Disabled;
+        let _quarantined = ToolStatus::Quarantined;
+    }
+
+    #[test]
+    fn test_trust_level_variants() {
+        let _system = TrustLevel::System;
+        let _verified = TrustLevel::Verified;
+        let _user = TrustLevel::User;
+    }
+
+    #[test]
+    fn test_compute_binary_hash() {
+        let hash1 = compute_binary_hash(b"hello");
+        let hash2 = compute_binary_hash(b"hello");
+        let hash3 = compute_binary_hash(b"world");
+        assert_eq!(hash1, hash2);
+        assert_ne!(hash1, hash3);
+        assert!(!hash1.is_empty());
+    }
+
+    #[test]
+    fn test_verify_binary_integrity() {
+        let data = b"test data";
+        let hash = compute_binary_hash(data);
+        assert!(verify_binary_integrity(data, &hash));
+        assert!(!verify_binary_integrity(b"other data", &hash));
+    }
+}

@@ -174,3 +174,109 @@ impl Default for ChannelManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_channel_manager_new() {
+        let manager = ChannelManager::new();
+        // Should start with no channels
+        let channels = manager.channels.try_read().unwrap();
+        assert!(channels.is_empty());
+    }
+
+    #[test]
+    fn test_channel_manager_default() {
+        let manager = ChannelManager::default();
+        let channels = manager.channels.try_read().unwrap();
+        assert!(channels.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_channel_names_empty() {
+        let manager = ChannelManager::new();
+        let names = manager.channel_names().await;
+        assert!(names.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_respond_unknown_channel() {
+        let manager = ChannelManager::new();
+        let msg = IncomingMessage::new("nonexistent", "user", "hello");
+        let response = OutgoingResponse {
+            content: "world".to_string(),
+            thread_id: None,
+            metadata: serde_json::Value::Null,
+        };
+        let result = manager.respond(&msg, response).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ChannelError::SendFailed { name, reason } => {
+                assert_eq!(name, "nonexistent");
+                assert!(reason.contains("not found"));
+            }
+            other => panic!("Expected SendFailed, got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_unknown_channel() {
+        let manager = ChannelManager::new();
+        let response = OutgoingResponse {
+            content: "hello".to_string(),
+            thread_id: None,
+            metadata: serde_json::Value::Null,
+        };
+        let result = manager.broadcast("nonexistent", "user1", response).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_send_status_unknown_channel_ok() {
+        let manager = ChannelManager::new();
+        // send_status silently ignores unknown channels
+        let result = manager
+            .send_status(
+                "nonexistent",
+                StatusUpdate::Status("test".to_string()),
+                &serde_json::Value::Null,
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_start_all_no_channels_errors() {
+        let manager = ChannelManager::new();
+        let result = manager.start_all().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_health_check_all_empty() {
+        let manager = ChannelManager::new();
+        let results = manager.health_check_all().await;
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_all_empty() {
+        let manager = ChannelManager::new();
+        let result = manager.shutdown_all().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_all_empty() {
+        let manager = ChannelManager::new();
+        let response = OutgoingResponse {
+            content: "hello".to_string(),
+            thread_id: None,
+            metadata: serde_json::Value::Null,
+        };
+        let results = manager.broadcast_all("user1", response).await;
+        assert!(results.is_empty());
+    }
+}

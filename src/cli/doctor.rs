@@ -387,6 +387,69 @@ async fn check_network() -> Check {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_ok() {
+        let c = Check::ok("Test", "all good");
+        assert_eq!(c.name, "Test");
+        assert_eq!(c.message, "all good");
+        assert!(c.fix.is_none());
+        assert_eq!(c.icon(), "[OK]");
+    }
+
+    #[test]
+    fn test_check_warn() {
+        let c = Check::warn("Test", "something off", "do this");
+        assert_eq!(c.name, "Test");
+        assert_eq!(c.message, "something off");
+        assert_eq!(c.fix.as_deref(), Some("do this"));
+        assert_eq!(c.icon(), "[WARN]");
+    }
+
+    #[test]
+    fn test_check_error() {
+        let c = Check::error("Test", "broken", "fix it");
+        assert_eq!(c.name, "Test");
+        assert_eq!(c.message, "broken");
+        assert_eq!(c.fix.as_deref(), Some("fix it"));
+        assert_eq!(c.icon(), "[ERR]");
+    }
+
+    #[test]
+    fn test_check_rust_version() {
+        let c = check_rust_version();
+        assert_eq!(c.name, "Version");
+        assert!(c.message.starts_with("IronClaw v"));
+        assert!(matches!(c.status, CheckStatus::Ok));
+    }
+
+    #[test]
+    fn test_check_data_directory() {
+        let c = check_data_directory();
+        assert_eq!(c.name, "Data Dir");
+        // Either exists or warns - both are valid
+        assert!(matches!(c.status, CheckStatus::Ok | CheckStatus::Warning));
+    }
+
+    #[test]
+    fn test_check_disk_space_runs() {
+        let c = check_disk_space();
+        assert_eq!(c.name, "Disk Space");
+        // Should not error out
+        assert!(matches!(c.status, CheckStatus::Ok | CheckStatus::Warning));
+    }
+
+    #[test]
+    fn test_icon_values() {
+        assert_eq!(Check::ok("t", "m").icon(), "[OK]");
+        assert_eq!(Check::warn("t", "m", "f").icon(), "[WARN]");
+        assert_eq!(Check::error("t", "m", "f").icon(), "[ERR]");
+    }
+}
+
 fn check_disk_space() -> Check {
     let data_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))

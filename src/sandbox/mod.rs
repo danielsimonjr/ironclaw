@@ -111,3 +111,100 @@ pub fn default_allowlist() -> Vec<String> {
 pub fn default_credential_mappings() -> Vec<CredentialMapping> {
     config::default_credential_mappings()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_allowlist_not_empty() {
+        let list = default_allowlist();
+        assert!(!list.is_empty());
+    }
+
+    #[test]
+    fn test_default_allowlist_contains_key_domains() {
+        let list = default_allowlist();
+        assert!(list.contains(&"crates.io".to_string()));
+        assert!(list.contains(&"github.com".to_string()));
+        assert!(list.contains(&"api.openai.com".to_string()));
+        assert!(list.contains(&"api.near.ai".to_string()));
+    }
+
+    #[test]
+    fn test_default_credential_mappings_not_empty() {
+        let mappings = default_credential_mappings();
+        assert!(!mappings.is_empty());
+    }
+
+    #[test]
+    fn test_default_credential_mappings_domains() {
+        let mappings = default_credential_mappings();
+        let domains: Vec<&str> = mappings.iter().map(|m| m.domain.as_str()).collect();
+        assert!(domains.contains(&"api.openai.com"));
+        assert!(domains.contains(&"api.anthropic.com"));
+        assert!(domains.contains(&"api.near.ai"));
+    }
+
+    #[test]
+    fn test_credential_mapping_default() {
+        let mapping = CredentialMapping::default();
+        assert!(mapping.domain.is_empty());
+        assert!(mapping.secret_name.is_empty());
+        assert!(matches!(mapping.location, CredentialLocation::AuthorizationBearer));
+    }
+
+    #[test]
+    fn test_sandbox_config_default() {
+        let config = SandboxConfig::default();
+        assert!(!config.enabled);
+        assert_eq!(config.policy, SandboxPolicy::ReadOnly);
+        assert_eq!(config.timeout, std::time::Duration::from_secs(120));
+        assert_eq!(config.memory_limit_mb, 2048);
+        assert_eq!(config.cpu_shares, 1024);
+        assert!(config.auto_pull_image);
+        assert_eq!(config.proxy_port, 0);
+        assert!(!config.network_allowlist.is_empty());
+    }
+
+    #[test]
+    fn test_resource_limits_default() {
+        let limits = ResourceLimits::default();
+        assert_eq!(limits.memory_bytes, 2 * 1024 * 1024 * 1024);
+        assert_eq!(limits.cpu_shares, 1024);
+        assert_eq!(limits.timeout, std::time::Duration::from_secs(120));
+        assert_eq!(limits.max_output_bytes, 64 * 1024);
+    }
+
+    #[test]
+    fn test_sandbox_policy_from_str_aliases() {
+        use std::str::FromStr;
+        assert_eq!(SandboxPolicy::from_str("ro").unwrap(), SandboxPolicy::ReadOnly);
+        assert_eq!(SandboxPolicy::from_str("rw").unwrap(), SandboxPolicy::WorkspaceWrite);
+        assert_eq!(SandboxPolicy::from_str("full").unwrap(), SandboxPolicy::FullAccess);
+        assert_eq!(SandboxPolicy::from_str("READONLY").unwrap(), SandboxPolicy::ReadOnly);
+        assert_eq!(SandboxPolicy::from_str("read_only").unwrap(), SandboxPolicy::ReadOnly);
+        assert_eq!(SandboxPolicy::from_str("workspacewrite").unwrap(), SandboxPolicy::WorkspaceWrite);
+        assert_eq!(SandboxPolicy::from_str("fullaccess").unwrap(), SandboxPolicy::FullAccess);
+    }
+
+    #[test]
+    fn test_sandbox_policy_none_is_ambiguous() {
+        use std::str::FromStr;
+        let err = SandboxPolicy::from_str("none").unwrap_err();
+        assert!(err.contains("ambiguous"));
+    }
+
+    #[test]
+    fn test_sandbox_policy_invalid() {
+        use std::str::FromStr;
+        assert!(SandboxPolicy::from_str("garbage").is_err());
+    }
+
+    #[test]
+    fn test_anthropic_credential_uses_header() {
+        let mappings = default_credential_mappings();
+        let anthropic = mappings.iter().find(|m| m.domain == "api.anthropic.com").unwrap();
+        assert!(matches!(anthropic.location, CredentialLocation::Header(ref h) if h == "x-api-key"));
+    }
+}

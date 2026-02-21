@@ -557,3 +557,122 @@ impl Channel for ReplChannel {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_slash_commands_list_not_empty() {
+        assert!(!SLASH_COMMANDS.is_empty());
+        // All commands start with /
+        for cmd in SLASH_COMMANDS {
+            assert!(cmd.starts_with('/'), "Command should start with /: {cmd}");
+        }
+    }
+
+    #[test]
+    fn test_slash_commands_contains_essentials() {
+        assert!(SLASH_COMMANDS.contains(&"/help"));
+        assert!(SLASH_COMMANDS.contains(&"/quit"));
+        assert!(SLASH_COMMANDS.contains(&"/exit"));
+        assert!(SLASH_COMMANDS.contains(&"/debug"));
+        assert!(SLASH_COMMANDS.contains(&"/undo"));
+        assert!(SLASH_COMMANDS.contains(&"/redo"));
+    }
+
+    #[test]
+    fn test_format_json_params_object() {
+        let params = serde_json::json!({"key": "value", "num": 42});
+        let result = format_json_params(&params, "  ");
+        assert!(result.contains("key"));
+        assert!(result.contains("value"));
+        assert!(result.contains("42"));
+    }
+
+    #[test]
+    fn test_format_json_params_string_truncation() {
+        let long_str = "x".repeat(200);
+        let params = serde_json::json!({"key": long_str});
+        let result = format_json_params(&params, "");
+        // The string value should be truncated to 120 chars
+        assert!(!result.contains(&long_str));
+    }
+
+    #[test]
+    fn test_format_json_params_non_object() {
+        let params = serde_json::json!([1, 2, 3]);
+        let result = format_json_params(&params, "  ");
+        assert!(result.contains("1"));
+    }
+
+    #[test]
+    fn test_format_json_params_non_object_truncation() {
+        // Large non-object value gets truncated at 300 chars
+        let big_array: Vec<i32> = (0..200).collect();
+        let params = serde_json::json!(big_array);
+        let result = format_json_params(&params, "");
+        // If pretty-printed exceeds 300 chars, it should be truncated
+        if serde_json::to_string_pretty(&params).unwrap().len() > 300 {
+            assert!(result.contains("..."));
+        }
+    }
+
+    #[test]
+    fn test_repl_channel_new() {
+        let ch = ReplChannel::new();
+        assert!(ch.single_message.is_none());
+        assert!(!ch.is_debug());
+    }
+
+    #[test]
+    fn test_repl_channel_with_message() {
+        let ch = ReplChannel::with_message("hello".to_string());
+        assert_eq!(ch.single_message.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn test_repl_channel_default() {
+        let ch = ReplChannel::default();
+        assert!(ch.single_message.is_none());
+    }
+
+    #[test]
+    fn test_repl_channel_debug_toggle() {
+        let ch = ReplChannel::new();
+        assert!(!ch.is_debug());
+        ch.debug_mode.store(true, Ordering::Relaxed);
+        assert!(ch.is_debug());
+    }
+
+    #[test]
+    fn test_repl_channel_name() {
+        let ch = ReplChannel::new();
+        assert_eq!(ch.name(), "repl");
+    }
+
+    #[test]
+    fn test_cli_status_max_constant() {
+        assert_eq!(CLI_STATUS_MAX, 200);
+    }
+
+    #[test]
+    fn test_history_path_ends_with_expected() {
+        let path = history_path();
+        assert!(path.ends_with("history"));
+        assert!(path.to_string_lossy().contains(".ironclaw"));
+    }
+
+    #[test]
+    fn test_slash_commands_no_duplicates() {
+        let mut seen = std::collections::HashSet::new();
+        for cmd in SLASH_COMMANDS {
+            assert!(seen.insert(cmd), "Duplicate slash command: {cmd}");
+        }
+    }
+
+    #[test]
+    fn test_make_skin_does_not_panic() {
+        let _skin = make_skin();
+    }
+}
