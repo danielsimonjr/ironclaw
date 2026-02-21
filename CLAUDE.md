@@ -13,6 +13,8 @@ cargo test safety::sanitizer::tests                             # Run a module's
 RUST_LOG=ironclaw=debug cargo run                               # Run with debug logging
 ```
 
+Use `cargo run -- --no-db` to bypass the `DATABASE_URL` requirement on startup (useful for CLI-only commands).
+
 Feature-gated builds:
 
 ```bash
@@ -57,39 +59,14 @@ Channels (REPL, HTTP, WASM, Web Gateway)
 
 ### Source Modules
 
-The codebase is organized into 28 public modules (`src/lib.rs`):
+The codebase has 28 public modules (`src/lib.rs`), grouped by domain:
 
-| Module | Purpose |
-|--------|---------|
-| `agent` | Core agent loop, routing, scheduling, session management, worker dispatch, self-repair, heartbeat, routine engine, compaction, undo, multi-agent routing, auth profiles, command queue, config reload |
-| `bootstrap` | Initial setup, bootstrap config persistence (`~/.ironclaw/bootstrap.json`) |
-| `channels` | Input channel abstraction (REPL, HTTP, WASM, web gateway), channel manager, block streaming, delivery retry, inline commands, status tracking, self-message bypass |
-| `cli` | CLI subcommands (tool, mcp, memory, config, pairing, status, doctor, gateway, sessions, hooks, cron, logs, message, channels, plugins, webhooks, skills, agents, nodes, browser, completion, service) |
-| `config` | Configuration management (env > DB > defaults) |
-| `context` | Job context, mutable state, identity memory injection (IDENTITY.md, SOUL.md, etc.) |
-| `db` | Database trait + dual backend (PostgreSQL, libSQL) |
-| `error` | Typed error hierarchy via `thiserror` |
-| `estimation` | Cost/time prediction with ML-based learner |
-| `evaluation` | Job outcome success evaluation and metrics |
-| `extensions` | Dynamic tool/MCP server discovery, install, auth, lifecycle management, plugin system, ClawHub registry |
-| `history` | Job/session/conversation history persistence and analytics |
-| `hooks` | Lifecycle hooks engine (beforeInbound, beforeOutbound, beforeToolCall, onSessionStart, onSessionEnd, transformResponse), 8 bundled hooks, outbound webhooks, Gmail pub/sub, audio transcription |
-| `hot_reload` | Dynamic component reloading with file system watching |
-| `llm` | LLM provider abstraction, multi-provider support (NEAR AI, OpenAI, Anthropic, Gemini, Bedrock, Ollama, OpenRouter), failover chains, auto-discovery, thinking modes, reasoning, cost tracking |
-| `media` | Image processing, PDF extraction, audio transcription, video metadata, vision integration, TTS (OpenAI + Edge), sticker conversion, MIME detection, media caching, large document processing via RLM techniques |
-| `orchestrator` | Container job orchestration, internal API (`:50051`), per-job bearer token auth |
-| `pairing` | DM approval flow for unknown senders, device pairing with challenge codes |
-| `safety` | Safety layer (sanitizer → validator → policy), leak detection, log redaction, OAuth 2.0/2.1, allowlist/blocklist ACLs, group policies, elevated mode, safe binaries allowlist |
-| `sandbox` | Docker container management, network proxy with HTTP allowlist |
-| `secrets` | Encrypted credential vault, system keychain integration (macOS/Linux), AES-GCM crypto |
-| `settings` | Runtime settings storage (separate from config) |
-| `setup` | Interactive onboarding wizard (multi-provider LLM selection) |
-| `skills` | Modular capability bundles with tools, prompts, and policies; vulnerability scanner |
-| `tools` | Tool registry, built-in/WASM/MCP tool execution, software builder |
-| `tracing_fmt` | Custom tracing/logging format with terminal truncation |
-| `util` | Shared utilities |
-| `worker` | Sandboxed worker runtime, Claude Code bridge (`claude` CLI delegation) |
-| `workspace` | Filesystem-like persistent memory, hybrid search (FTS + vector), document chunking, connections, spaces, profiles, batch embeddings, citations |
+- **Core**: `agent` (loop, routing, scheduling, session mgmt, self-repair, heartbeat), `config`, `context`, `error`, `worker`, `orchestrator`
+- **I/O**: `channels` (REPL, HTTP, WASM, web gateway), `llm` (7 providers, failover, cost tracking), `media` (image, PDF, audio, video, TTS)
+- **Persistence**: `db` (dual PostgreSQL/libSQL), `workspace` (memory, hybrid search, embeddings), `history`, `settings`, `secrets`
+- **Safety**: `safety` (sanitizer → validator → policy, leak detection, ACLs, OAuth), `sandbox` (Docker, network proxy)
+- **Extensions**: `tools` (registry, built-in/WASM/MCP), `extensions` (discovery, install, ClawHub), `hooks` (lifecycle events, webhooks), `skills`
+- **Support**: `cli`, `bootstrap`, `setup`, `pairing`, `estimation`, `evaluation`, `hot_reload`, `tracing_fmt`, `util`
 
 ### Startup Sequence (main.rs)
 
@@ -111,25 +88,6 @@ PostgreSQL (default, `postgres` feature) and libSQL/Turso (`libsql` feature). **
 
 Key type mappings for libSQL: `UUID→TEXT`, `TIMESTAMPTZ→TEXT(ISO-8601)`, `JSONB→TEXT`, `VECTOR(1536)→F32_BLOB(1536)`, `tsvector→FTS5`.
 
-Database trait methods by category (~75 total):
-
-| Category | Count | Examples |
-|----------|-------|---------|
-| Conversations | 12 | `create_conversation`, `add_conversation_message`, `list_conversations_with_preview` |
-| Jobs | 5 | `save_job`, `get_job`, `update_job_status`, `mark_job_stuck` |
-| Sandbox Jobs | 11 | `save_sandbox_job`, `list_sandbox_jobs`, `update_sandbox_job_status`, `update_sandbox_job_mode` |
-| Routines | 10 | `create_routine`, `list_routines`, `list_due_cron_routines`, `update_routine_runtime` |
-| Routine Runs | 4 | `create_routine_run`, `complete_routine_run`, `list_routine_runs` |
-| Settings | 8 | `get_setting`, `set_setting`, `list_settings`, `get_all_settings` |
-| Workspace Docs | 8 | `get_document_by_path`, `update_document`, `list_directory` |
-| Workspace Chunks | 4 | `insert_chunk`, `update_chunk_embedding`, `get_chunks_without_embeddings` |
-| Workspace Search | 1 | `hybrid_search` |
-| Workspace Memory | 4+ | `create_connection`, `create_space`, `set_profile_fact` (connections, spaces, profiles) |
-| Tool Failures | 4 | `record_tool_failure`, `get_broken_tools`, `mark_tool_repaired` |
-| Actions/Events | 4 | `save_action`, `get_job_actions`, `save_job_event`, `list_job_events` |
-| LLM/Estimation | 3 | `record_llm_call`, `save_estimation_snapshot`, `update_estimation_actuals` |
-| Migrations | 1 | `run_migrations` |
-
 ### Tool System
 
 Three tool types share the same `Tool` trait interface:
@@ -142,19 +100,7 @@ Three tool types share the same `Tool` trait interface:
 
 Tools with `requires_approval() = true` (shell, http, file write/patch, builder) gate execution on user approval.
 
-#### Built-in Tools (registered in phases)
-
-| Phase | Tools | Domain |
-|-------|-------|--------|
-| `register_builtin_tools()` | `echo`, `time`, `json`, `http` | Orchestrator — always safe |
-| `register_dev_tools()` | `shell`, `read_file`, `write_file`, `list_dir`, `apply_patch` | Container — file/shell ops |
-| `register_memory_tools(workspace)` | `memory_search`, `memory_write`, `memory_read`, `memory_tree`, `memory_connect`, `memory_spaces`, `memory_profile` | Memory operations |
-| `register_job_tools(...)` | `create_job`, `list_jobs`, `job_status`, `cancel_job` | Job management |
-| `register_extension_tools(manager)` | `tool_search`, `tool_install`, `tool_auth`, `tool_activate`, `tool_list`, `tool_remove` | Extension lifecycle |
-| `register_routine_tools(store, engine)` | `routine_create`, `routine_list`, `routine_update`, `routine_delete`, `routine_history` | Scheduled routines |
-| `register_builder_tool(llm, safety, ...)` | `build_software` | LLM-driven software builder |
-
-Additional built-in tools: `session_list`, `session_history`, `session_send` (session management), `browser` (browser automation), `marketplace`, `ecommerce`, `restaurant`, `taskrabbit` (service integrations).
+Built-in tools are registered in phases in `ToolRegistry` (`registry.rs`) — see `register_builtin_tools()`, `register_dev_tools()`, `register_memory_tools()`, etc.
 
 #### WASM Tools (`tools-src/`)
 
@@ -166,18 +112,7 @@ Three pluggable WASM channels: `slack`, `telegram`, `whatsapp`. Each implements 
 
 ### Safety Layer
 
-All external tool output passes through `SafetyLayer` (sanitizer → validator → policy) before reaching the LLM. Tool outputs are XML-wrapped with sanitization markers. Additional safety systems:
-
-- **Sanitizer**: Injection pattern detection with HTML entity decoding, invisible character stripping, homoglyph normalization
-- **LeakDetector**: Scans for secret exfiltration in requests and responses; URL percent-encoding detection; SHA256/384/512 hex patterns; case-insensitive header scanning
-- **LogRedactor**: Regex-based redaction of API keys, Bearer tokens, JWTs, AWS keys, emails, passwords in URLs, Basic auth, database connection strings, GitHub/Slack tokens
-- **Policy**: System file access blocking, shell/SQL injection detection, path traversal variant detection (URL-encoded, double-encoded, backslash)
-- **GroupPolicyManager**: Per-group tool allow/deny/require-approval policies
-- **ElevatedMode**: Session-bound privileged execution with duration clamping [60s, 8h] and audit tracking
-- **BinsAllowlist**: Curated POSIX utility allowlist, enforced by default, with LD_PRELOAD/DYLD environment variable validation
-- **AccessControlList**: Allowlist/blocklist ACLs with glob matching
-- **OAuthFlowManager**: OAuth 2.0/2.1 with PKCE S256 support; `SecretString` for all tokens/secrets; `OsRng` for all security-critical random values
-- **VulnerabilityScanner**: Regex-based skill vulnerability scanning with severity levels
+All external tool output passes through `SafetyLayer` (sanitizer → validator → policy) before reaching the LLM. Tool outputs are XML-wrapped with sanitization markers. Key subsystems: `LeakDetector` (secret exfiltration scanning), `LogRedactor` (credential redaction), `OAuthFlowManager` (OAuth 2.0/2.1 + PKCE), `GroupPolicyManager` (per-group ACLs), `ElevatedMode` (session-bound privilege escalation). See `src/safety/` for full details.
 
 ### Workspace & Memory
 
@@ -209,83 +144,6 @@ Several background tasks run alongside the main agent loop:
 - **Routine engine**: Cron-based and event-driven scheduled job execution (`src/agent/routine_engine.rs`)
 - **Context monitor**: Token/time/cost tracking for active jobs (`src/agent/context_monitor.rs`)
 - **Config reload**: File system watching with broadcast notifications (`src/agent/config_reload.rs`)
-
-## Repository Structure
-
-```
-ironclaw/
-├── src/                    # Main Rust source (28 modules)
-├── tools-src/              # WASM tool crates (9 tools)
-│   ├── gmail/
-│   ├── google-calendar/
-│   ├── google-docs/
-│   ├── google-drive/
-│   ├── google-sheets/
-│   ├── google-slides/
-│   ├── okta/
-│   ├── slack/
-│   └── telegram/
-├── channels-src/           # WASM channel crates (3 channels)
-│   ├── slack/
-│   ├── telegram/
-│   └── whatsapp/
-├── wit/                    # WASM Interface Definitions
-│   ├── tool.wit            # Tool component interface
-│   └── channel.wit         # Channel component interface
-├── migrations/             # PostgreSQL schema (V1–V9)
-├── docs/                   # Additional documentation
-│   ├── BUILDING_CHANNELS.md
-│   ├── TELEGRAM_SETUP.md
-│   └── user-guide.html     # Interactive single-page User Guide & Maintenance Manual
-├── deploy/                 # Deployment configs (systemd, setup scripts, GCP, Windows installer)
-│   ├── cloud-sql-proxy.service
-│   ├── ironclaw.service
-│   ├── setup.sh
-│   ├── env.example
-│   └── windows/            # Windows installer files
-│       ├── ironclaw-installer.ps1  # PowerShell installer script
-│       └── ironclaw.wxs           # WiX MSI source
-├── docker/                 # Container images (sandbox.Dockerfile)
-├── examples/               # Example code (test_heartbeat.rs)
-├── .claude/                # Claude Code custom commands
-│   └── commands/
-│       ├── add-tool.md
-│       ├── add-sse-event.md
-│       ├── trace.md
-│       └── ship.md
-├── .github/workflows/      # CI (test, code_style, release, release-plz, windows-installer)
-├── build.rs                # Build script (compiles Telegram channel WASM)
-├── Cargo.toml              # Rust 2024 edition, MSRV 1.92
-├── Dockerfile              # Main service container
-├── Dockerfile.worker       # Worker process container
-├── docker-compose.yml      # Local dev setup
-├── FEATURE_PARITY.md       # IronClaw ↔ OpenClaw tracking matrix
-├── AGENTS.md               # Agent rules and policies
-└── CONTRIBUTING.md          # Contributing guidelines
-```
-
-## Error Handling Hierarchy
-
-All errors use `thiserror` with a top-level `Error` enum in `src/error.rs` that wraps domain-specific error types:
-
-| Error Type | Domain |
-|------------|--------|
-| `ConfigError` | Missing env vars, invalid values, parse failures |
-| `DatabaseError` | Pool, query, not-found, constraint, migration errors (feature-gated for postgres/libsql) |
-| `ChannelError` | Startup, disconnect, send, auth, rate-limit failures |
-| `LlmError` | Request, rate-limit, context-length, auth, session errors |
-| `ToolError` | Not-found, execution, timeout, sandbox, auth-required errors |
-| `SafetyError` | Injection detection, output size, blocked content, policy violations |
-| `JobError` | Not-found, invalid transition, stuck, max-jobs-exceeded |
-| `EstimationError` | Insufficient data, calculation failures |
-| `EvaluationError` | Failed evaluation, missing data |
-| `RepairError` | Repair failure, max attempts exceeded, diagnosis failure |
-| `WorkspaceError` | Document not-found, search, embedding, chunking errors |
-| `OrchestratorError` | Container creation, auth, Docker, timeout errors |
-| `WorkerError` | Connection, LLM proxy, secret resolution, missing token |
-| `HookError` | Execution failure, timeout, registration errors |
-| `MediaError` | Unsupported type, processing failure, size limits, transcription, vision, recursive processing depth/iteration limits |
-| `SkillsError` | Not-found, execution failure, invalid definition |
 
 ## Code Conventions
 
@@ -357,28 +215,7 @@ All errors use `thiserror` with a top-level `Error` enum in `src/error.rs` that 
 
 ## Configuration
 
-Config loads with priority: environment variables > database settings > defaults. Bootstrap config persists to `~/.ironclaw/bootstrap.json`. See `.env.example` for all environment variables. Key ones:
-
-- `DATABASE_URL` / `DATABASE_BACKEND` — Connection string and backend (`postgres` default, or `libsql`)
-- `DATABASE_POOL_SIZE` — Connection pool size (default 10)
-- `LLM_BACKEND` — LLM provider: `nearai` (default), `openai`, `anthropic`, `ollama`, `openai_compatible`, `gemini`, `bedrock`, `openrouter`
-- `NEARAI_SESSION_TOKEN` / `NEARAI_MODEL` / `NEARAI_BASE_URL` / `NEARAI_AUTH_URL` — NEAR AI provider (when `LLM_BACKEND=nearai`)
-- `OPENAI_API_KEY` / `OPENAI_MODEL` — OpenAI provider (when `LLM_BACKEND=openai`)
-- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — Anthropic provider (when `LLM_BACKEND=anthropic`)
-- `OLLAMA_BASE_URL` / `OLLAMA_MODEL` — Ollama provider (when `LLM_BACKEND=ollama`)
-- `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` — OpenAI-compatible provider (when `LLM_BACKEND=openai_compatible`)
-- `GEMINI_API_KEY` / `GEMINI_MODEL` — Google Gemini provider (when `LLM_BACKEND=gemini`)
-- `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `BEDROCK_MODEL` — AWS Bedrock provider (when `LLM_BACKEND=bedrock`)
-- `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` / `OPENROUTER_BASE_URL` / `OPENROUTER_REFERER` — OpenRouter provider (when `LLM_BACKEND=openrouter`)
-- `GATEWAY_ENABLED` / `GATEWAY_PORT` / `GATEWAY_AUTH_TOKEN` — Web UI gateway
-- `SANDBOX_ENABLED` — Docker container isolation
-- `CLAUDE_CODE_ENABLED` — Claude CLI delegation mode
-- `HEARTBEAT_ENABLED` / `HEARTBEAT_INTERVAL_SECS` / `HEARTBEAT_NOTIFY_CHANNEL` — Proactive periodic execution
-- `SELF_REPAIR_CHECK_INTERVAL_SECS` / `SELF_REPAIR_MAX_ATTEMPTS` — Self-repair loop
-- `AGENT_MAX_PARALLEL_JOBS` / `AGENT_JOB_TIMEOUT_SECS` / `AGENT_STUCK_THRESHOLD_SECS` — Job execution limits
-- `AGENT_USE_PLANNING` — Enable planning phase before tool execution (default true)
-- `SAFETY_MAX_OUTPUT_LENGTH` / `SAFETY_INJECTION_CHECK_ENABLED` — Safety layer settings
-- `RUST_LOG=ironclaw=debug` or `ironclaw::agent=debug` — Targeted logging
+Config loads with priority: environment variables > database settings > defaults. Bootstrap config persists to `~/.ironclaw/bootstrap.json`. See `deploy/env.example` for all environment variables. Key: `DATABASE_URL`, `LLM_BACKEND`, `RUST_LOG=ironclaw=debug`.
 
 ## CI / Release
 
@@ -390,34 +227,3 @@ Config loads with priority: environment variables > database settings > defaults
 
 Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`.
 
-### Test Coverage
-
-~1,840 unit tests across ~190 tested files (out of 247 total `.rs` files), 133 user journey integration tests (`tests/user_journey_integration.rs`), plus 53 additional integration tests. Key coverage areas:
-
-| Module | Coverage | Notes |
-|--------|----------|-------|
-| `safety` | 100% files | Leak detection, redaction, policies |
-| `agent` | 95% files | Command queue, session mgmt, routing |
-| `channels` | 78% files | WASM routing, web gateway, inline commands |
-| `tools` | 71% files | Browser, MCP client, WASM hosting, memory tools identity protection |
-| `config` | Tested | Enum parsing, validation, env var helpers |
-| `db` | Partial | libSQL type conversion helpers, pure functions |
-| `context` | Tested | Full state machine matrix, transition validation |
-| `estimation` | Tested | EMA correctness, zero-estimate guards, confidence |
-| `workspace` | Tested | RRF algorithm, search config, normalization |
-
-See `TEST_COVERAGE_ANALYSIS.md` for the full analysis and remaining gaps.
-
-### Windows Installer
-
-The `deploy/windows/` directory contains Windows-specific installation tooling:
-
-- **`ironclaw-installer.ps1`** — PowerShell installer script supporting:
-  - One-liner install: `irm https://github.com/danielsimonjr/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex`
-  - Architecture detection (x86_64, ARM64 via emulation)
-  - Latest version auto-detection via GitHub API
-  - Dual install modes: archive-based (tar.gz) or MSI (`-UseMsi`)
-  - Custom install directory (`-InstallDir`), version pinning (`-Version`), PATH opt-out (`-NoPathUpdate`)
-  - CARGO_HOME/bin detection with LocalAppData fallback
-  - Upgrade handling for existing installations
-- **`ironclaw.wxs`** — WiX v3 source for MSI builds via `cargo-wix`/`cargo-dist`, per-user install scope with PATH integration. GUIDs must match `[package.metadata.wix]` in `Cargo.toml`.
