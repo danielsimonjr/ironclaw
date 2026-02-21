@@ -428,9 +428,9 @@ async fn oauth_callback_handler(
         );
     }
 
-    // TODO: In a future iteration, use the state nonce to look up the pending auth
-    // and complete the token exchange. For now, the OAuth flow uses local callbacks
-    // via authorize_mcp_server() which handles the full flow synchronously.
+    // Design note: The OAuth flow uses local callbacks via authorize_mcp_server()
+    // which handles the full token exchange synchronously. A nonce-based async
+    // lookup would be needed if we move to server-side OAuth redirect handling.
 
     (
         StatusCode::OK,
