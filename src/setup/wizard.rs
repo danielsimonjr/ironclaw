@@ -978,7 +978,11 @@ impl SetupWizard {
             let crypto = SecretsCrypto::new(SecretString::from(key))
                 .map_err(|e| SetupError::Config(e.to_string()))?;
             self.secrets_crypto = Some(Arc::new(crypto));
-            Arc::clone(self.secrets_crypto.as_ref().unwrap())
+            Arc::clone(
+                self.secrets_crypto
+                    .as_ref()
+                    .expect("secrets_crypto was just set to Some above"),
+            )
         };
 
         // Create backend-appropriate secrets store

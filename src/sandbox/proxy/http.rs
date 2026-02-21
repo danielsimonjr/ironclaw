@@ -382,7 +382,16 @@ async fn forward_request(
                         }
                     }
 
-                    Ok(builder.body(full_body(body)).unwrap())
+                    match builder.body(full_body(body)) {
+                        Ok(resp) => Ok(resp),
+                        Err(e) => {
+                            tracing::error!("Proxy: failed to build response: {}", e);
+                            Ok(error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Failed to build response: {}", e),
+                            ))
+                        }
+                    }
                 }
                 Err(e) => {
                     tracing::error!("Proxy: failed to read response body: {}", e);
@@ -424,7 +433,7 @@ fn error_response(status: StatusCode, message: String) -> Response<BoxBody<Bytes
         .status(status)
         .header("Content-Type", "text/plain")
         .body(full_body(Bytes::from(message)))
-        .unwrap()
+        .expect("building a simple response with valid status should never fail")
 }
 
 /// Create a body from bytes.

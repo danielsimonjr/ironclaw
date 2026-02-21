@@ -641,7 +641,9 @@ impl Settings {
                 .ok_or_else(|| format!("Path not found: {}", path))?;
         }
 
-        let final_key = parts.last().unwrap();
+        let final_key = parts
+            .last()
+            .ok_or_else(|| format!("Empty path: {}", path))?;
         let obj = current
             .as_object_mut()
             .ok_or_else(|| format!("Parent is not an object: {}", path))?;
