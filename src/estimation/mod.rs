@@ -137,3 +137,63 @@ impl Default for Estimator {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimator_new() {
+        let estimator = Estimator::new();
+        // Verify accessors don't panic
+        let _ = estimator.cost();
+        let _ = estimator.time();
+        let _ = estimator.value();
+    }
+
+    #[test]
+    fn test_estimator_default() {
+        let estimator = Estimator::default();
+        let _ = estimator.cost();
+    }
+
+    #[test]
+    fn test_estimate_job_no_tools() {
+        let estimator = Estimator::new();
+        let estimate = estimator.estimate_job("test job", None, &[]);
+        assert!(estimate.tool_breakdown.is_empty());
+        assert!(estimate.confidence >= 0.0 && estimate.confidence <= 1.0);
+    }
+
+    #[test]
+    fn test_estimate_job_with_tools() {
+        let estimator = Estimator::new();
+        let tools = vec!["shell".to_string(), "http".to_string()];
+        let estimate = estimator.estimate_job("build something", Some("dev"), &tools);
+        assert_eq!(estimate.tool_breakdown.len(), 2);
+        assert_eq!(estimate.tool_breakdown[0].tool_name, "shell");
+        assert_eq!(estimate.tool_breakdown[1].tool_name, "http");
+    }
+
+    #[test]
+    fn test_estimate_job_with_category() {
+        let estimator = Estimator::new();
+        let estimate = estimator.estimate_job("task", Some("coding"), &[]);
+        assert!(estimate.confidence >= 0.0);
+    }
+
+    #[test]
+    fn test_record_actuals() {
+        let mut estimator = Estimator::new();
+        estimator.record_actuals(
+            "coding",
+            Decimal::new(100, 2),
+            Decimal::new(120, 2),
+            Duration::from_secs(60),
+            Duration::from_secs(75),
+        );
+        // After recording, estimates for same category should still work
+        let estimate = estimator.estimate_job("another task", Some("coding"), &[]);
+        assert!(estimate.confidence >= 0.0);
+    }
+}

@@ -203,3 +203,88 @@ pub trait Channel: Send + Sync {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_incoming_message_new() {
+        let msg = IncomingMessage::new("telegram", "user1", "hello");
+        assert_eq!(msg.channel, "telegram");
+        assert_eq!(msg.user_id, "user1");
+        assert_eq!(msg.content, "hello");
+        assert!(msg.user_name.is_none());
+        assert!(msg.thread_id.is_none());
+        assert_eq!(msg.metadata, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_incoming_message_with_thread() {
+        let msg = IncomingMessage::new("slack", "u1", "hi").with_thread("t1");
+        assert_eq!(msg.thread_id.as_deref(), Some("t1"));
+    }
+
+    #[test]
+    fn test_incoming_message_with_user_name() {
+        let msg = IncomingMessage::new("slack", "u1", "hi").with_user_name("Alice");
+        assert_eq!(msg.user_name.as_deref(), Some("Alice"));
+    }
+
+    #[test]
+    fn test_incoming_message_with_metadata() {
+        let meta = serde_json::json!({"chat_id": 123});
+        let msg = IncomingMessage::new("telegram", "u1", "hi").with_metadata(meta.clone());
+        assert_eq!(msg.metadata, meta);
+    }
+
+    #[test]
+    fn test_incoming_message_builder_chain() {
+        let msg = IncomingMessage::new("slack", "u1", "hi")
+            .with_thread("t1")
+            .with_user_name("Bob")
+            .with_metadata(serde_json::json!({"key": "val"}));
+        assert_eq!(msg.thread_id.as_deref(), Some("t1"));
+        assert_eq!(msg.user_name.as_deref(), Some("Bob"));
+    }
+
+    #[test]
+    fn test_outgoing_response_text() {
+        let resp = OutgoingResponse::text("hello");
+        assert_eq!(resp.content, "hello");
+        assert!(resp.thread_id.is_none());
+        assert_eq!(resp.metadata, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_outgoing_response_in_thread() {
+        let resp = OutgoingResponse::text("reply").in_thread("t1");
+        assert_eq!(resp.thread_id.as_deref(), Some("t1"));
+    }
+
+    #[test]
+    fn test_status_update_thinking() {
+        let s = StatusUpdate::Thinking("processing".into());
+        assert!(matches!(s, StatusUpdate::Thinking(ref t) if t == "processing"));
+    }
+
+    #[test]
+    fn test_status_update_tool_started() {
+        let s = StatusUpdate::ToolStarted {
+            name: "shell".into(),
+        };
+        assert!(matches!(s, StatusUpdate::ToolStarted { ref name } if name == "shell"));
+    }
+
+    #[test]
+    fn test_status_update_tool_completed() {
+        let s = StatusUpdate::ToolCompleted {
+            name: "http".into(),
+            success: true,
+        };
+        assert!(matches!(
+            s,
+            StatusUpdate::ToolCompleted { success: true, .. }
+        ));
+    }
+}

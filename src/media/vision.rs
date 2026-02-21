@@ -173,3 +173,90 @@ impl VisionProvider for OpenAiVisionProvider {
         !self.api_key.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_image_source_base64_round_trip() {
+        let src = ImageSource::Base64 {
+            data: "aGVsbG8=".into(),
+            media_type: "image/png".into(),
+        };
+        let json = serde_json::to_string(&src).unwrap();
+        let back: ImageSource = serde_json::from_str(&json).unwrap();
+        match back {
+            ImageSource::Base64 { data, media_type } => {
+                assert_eq!(data, "aGVsbG8=");
+                assert_eq!(media_type, "image/png");
+            }
+            _ => panic!("expected Base64 variant"),
+        }
+    }
+
+    #[test]
+    fn test_image_source_url_round_trip() {
+        let src = ImageSource::Url {
+            url: "https://example.com/img.png".into(),
+        };
+        let json = serde_json::to_string(&src).unwrap();
+        let back: ImageSource = serde_json::from_str(&json).unwrap();
+        match back {
+            ImageSource::Url { url } => assert_eq!(url, "https://example.com/img.png"),
+            _ => panic!("expected Url variant"),
+        }
+    }
+
+    #[test]
+    fn test_vision_request_construction() {
+        let req = VisionRequest {
+            image: ImageSource::Url {
+                url: "https://example.com/img.png".into(),
+            },
+            prompt: "describe this".into(),
+            detail: Some("high".into()),
+            max_tokens: Some(512),
+        };
+        assert_eq!(req.prompt, "describe this");
+        assert_eq!(req.detail.as_deref(), Some("high"));
+        assert_eq!(req.max_tokens, Some(512));
+    }
+
+    #[test]
+    fn test_openai_vision_provider_new() {
+        let p = OpenAiVisionProvider::new("sk-test".into(), "gpt-4o".into());
+        assert_eq!(p.name(), "openai_vision");
+        assert!(p.is_available());
+        assert_eq!(p.model, "gpt-4o");
+    }
+
+    #[test]
+    fn test_openai_vision_provider_empty_key() {
+        let p = OpenAiVisionProvider::new(String::new(), "gpt-4o".into());
+        assert!(!p.is_available());
+    }
+
+    #[test]
+    fn test_openai_vision_provider_with_base_url() {
+        let p = OpenAiVisionProvider::new("key".into(), "model".into())
+            .with_base_url("http://localhost".into());
+        assert_eq!(p.base_url, "http://localhost");
+    }
+
+    #[test]
+    fn test_vision_response_serialization() {
+        let resp = VisionResponse {
+            content: "a cat".into(),
+            input_tokens: Some(100),
+            output_tokens: Some(50),
+            provider: "openai_vision".into(),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let back: VisionResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.content, "a cat");
+        assert_eq!(back.input_tokens, Some(100));
+        assert_eq!(back.output_tokens, Some(50));
+        assert_eq!(back.provider, "openai_vision");
+    }
+}

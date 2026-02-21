@@ -319,3 +319,100 @@ pub trait LlmProvider: Send + Sync {
         input_cost * Decimal::from(input_tokens) + output_cost * Decimal::from(output_tokens)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chat_message_system() {
+        let msg = ChatMessage::system("you are helpful");
+        assert_eq!(msg.role, Role::System);
+        assert_eq!(msg.content, "you are helpful");
+        assert!(msg.tool_call_id.is_none());
+        assert!(msg.name.is_none());
+        assert!(msg.tool_calls.is_none());
+    }
+
+    #[test]
+    fn test_chat_message_user() {
+        let msg = ChatMessage::user("hello");
+        assert_eq!(msg.role, Role::User);
+        assert_eq!(msg.content, "hello");
+    }
+
+    #[test]
+    fn test_chat_message_assistant() {
+        let msg = ChatMessage::assistant("hi there");
+        assert_eq!(msg.role, Role::Assistant);
+        assert_eq!(msg.content, "hi there");
+    }
+
+    #[test]
+    fn test_chat_message_tool_result() {
+        let msg = ChatMessage::tool_result("call-1", "shell", "output");
+        assert_eq!(msg.role, Role::Tool);
+        assert_eq!(msg.content, "output");
+        assert_eq!(msg.tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(msg.name.as_deref(), Some("shell"));
+    }
+
+    #[test]
+    fn test_assistant_with_tool_calls_empty() {
+        let msg = ChatMessage::assistant_with_tool_calls(Some("thinking".into()), vec![]);
+        assert_eq!(msg.role, Role::Assistant);
+        assert_eq!(msg.content, "thinking");
+        assert!(msg.tool_calls.is_none());
+    }
+
+    #[test]
+    fn test_assistant_with_tool_calls_non_empty() {
+        let tc = ToolCall {
+            id: "1".into(),
+            name: "shell".into(),
+            arguments: serde_json::json!({"cmd": "ls"}),
+        };
+        let msg = ChatMessage::assistant_with_tool_calls(None, vec![tc]);
+        assert_eq!(msg.content, "");
+        assert_eq!(msg.tool_calls.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_completion_request_builder() {
+        let req = CompletionRequest::new(vec![ChatMessage::user("hi")])
+            .with_max_tokens(100)
+            .with_temperature(0.5);
+        assert_eq!(req.max_tokens, Some(100));
+        assert_eq!(req.temperature, Some(0.5));
+        assert_eq!(req.messages.len(), 1);
+    }
+
+    #[test]
+    fn test_role_serialization_round_trip() {
+        let roles = [Role::System, Role::User, Role::Assistant, Role::Tool];
+        for role in &roles {
+            let json = serde_json::to_string(role).unwrap();
+            let back: Role = serde_json::from_str(&json).unwrap();
+            assert_eq!(*role, back);
+        }
+    }
+
+    #[test]
+    fn test_role_serde_values() {
+        assert_eq!(serde_json::to_string(&Role::System).unwrap(), "\"system\"");
+        assert_eq!(serde_json::to_string(&Role::User).unwrap(), "\"user\"");
+    }
+
+    #[test]
+    fn test_tool_definition_serialization() {
+        let td = ToolDefinition {
+            name: "echo".into(),
+            description: "echoes input".into(),
+            parameters: serde_json::json!({"type": "object"}),
+        };
+        let json = serde_json::to_string(&td).unwrap();
+        let back: ToolDefinition = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "echo");
+        assert_eq!(back.description, "echoes input");
+    }
+}

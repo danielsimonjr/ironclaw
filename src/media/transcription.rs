@@ -159,3 +159,63 @@ impl TranscriptionProvider for WhisperProvider {
         !self.api_key.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_whisper_provider_new() {
+        let p = WhisperProvider::new("sk-test".into());
+        assert_eq!(p.name(), "whisper");
+        assert!(p.is_available());
+    }
+
+    #[test]
+    fn test_whisper_provider_empty_key_not_available() {
+        let p = WhisperProvider::new(String::new());
+        assert!(!p.is_available());
+    }
+
+    #[test]
+    fn test_whisper_provider_with_base_url() {
+        let p = WhisperProvider::new("key".into()).with_base_url("http://localhost:8080".into());
+        assert_eq!(p.base_url, "http://localhost:8080");
+    }
+
+    #[test]
+    fn test_whisper_provider_with_model() {
+        let p = WhisperProvider::new("key".into()).with_model("whisper-2".into());
+        assert_eq!(p.model, "whisper-2");
+    }
+
+    #[test]
+    fn test_transcription_result_serialization_round_trip() {
+        let result = TranscriptionResult {
+            text: "hello world".into(),
+            language: Some("en".into()),
+            duration_seconds: Some(3.5),
+            provider: "whisper".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let back: TranscriptionResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.text, "hello world");
+        assert_eq!(back.language.as_deref(), Some("en"));
+        assert_eq!(back.duration_seconds, Some(3.5));
+        assert_eq!(back.provider, "whisper");
+    }
+
+    #[test]
+    fn test_transcription_result_no_optional_fields() {
+        let result = TranscriptionResult {
+            text: "hi".into(),
+            language: None,
+            duration_seconds: None,
+            provider: "test".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let back: TranscriptionResult = serde_json::from_str(&json).unwrap();
+        assert!(back.language.is_none());
+        assert!(back.duration_seconds.is_none());
+    }
+}

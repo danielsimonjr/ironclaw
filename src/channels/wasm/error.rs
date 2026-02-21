@@ -87,3 +87,52 @@ impl From<crate::tools::wasm::WasmError> for WasmChannelError {
         WasmChannelError::Compilation(err.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_startup_failed_display() {
+        let e = WasmChannelError::StartupFailed {
+            name: "telegram".into(),
+            reason: "no config".into(),
+        };
+        assert_eq!(e.to_string(), "Channel telegram failed to start: no config");
+    }
+
+    #[test]
+    fn test_wasm_not_found_display() {
+        let e = WasmChannelError::WasmNotFound(PathBuf::from("/tmp/missing.wasm"));
+        assert!(e.to_string().contains("missing.wasm"));
+    }
+
+    #[test]
+    fn test_poll_interval_too_short_display() {
+        let e = WasmChannelError::PollIntervalTooShort {
+            name: "slack".into(),
+            interval_ms: 100,
+            min_ms: 500,
+        };
+        let s = e.to_string();
+        assert!(s.contains("100ms"));
+        assert!(s.contains("500ms"));
+        assert!(s.contains("slack"));
+    }
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file gone");
+        let e: WasmChannelError = io_err.into();
+        assert!(matches!(e, WasmChannelError::Io(_)));
+        assert!(e.to_string().contains("file gone"));
+    }
+
+    #[test]
+    fn test_emit_rate_limited() {
+        let e = WasmChannelError::EmitRateLimited {
+            name: "test".into(),
+        };
+        assert!(e.to_string().contains("rate limited"));
+    }
+}

@@ -247,32 +247,93 @@ impl WasmToolRuntime {
 
 /// Extract tool description from a compiled component.
 ///
-/// In a full implementation, this would use WIT bindgen to call the description() export.
-/// For now, we return a placeholder since we can't easily introspect without more setup.
+/// Inspects the component's type exports to verify it has a `description` export.
+/// Actually calling the export requires instantiation with a full Linker (all host
+/// imports must be provided), so the description should be set externally via
+/// `capabilities.json`. This function validates the component conforms to the
+/// tool WIT interface and returns a default description.
 fn extract_tool_description(
-    _engine: &Engine,
-    _component: &wasmtime::component::Component,
+    engine: &Engine,
+    component: &wasmtime::component::Component,
 ) -> Result<String, WasmError> {
-    // TODO: Use WIT bindgen to properly extract description
-    // This requires instantiating with a linker, which needs host functions.
-    // For now, tools should have their description set externally.
+    let component_type = component.component_type();
+    let has_description = component_type
+        .exports(engine)
+        .any(|(name, _)| name == "description");
+
+    if has_description {
+        tracing::debug!(
+            "Component exports 'description' function (requires instantiation to call)"
+        );
+    }
+
+    // Calling description() requires instantiation with a Linker providing all
+    // host imports (log, http-request, etc.). The description is set externally
+    // via capabilities.json at tool registration time.
     Ok("WASM sandboxed tool".to_string())
 }
 
 /// Extract tool schema from a compiled component.
 ///
-/// In a full implementation, this would use WIT bindgen to call the schema() export.
+/// Uses component type introspection to validate the component exports and
+/// extract parameter names from the `execute` function signature when available.
+/// Full schema extraction (calling the `schema` export) requires instantiation.
 fn extract_tool_schema(
-    _engine: &Engine,
-    _component: &wasmtime::component::Component,
+    engine: &Engine,
+    component: &wasmtime::component::Component,
 ) -> Result<serde_json::Value, WasmError> {
-    // TODO: Use WIT bindgen to properly extract schema
-    // For now, return a minimal schema that accepts any object.
-    Ok(serde_json::json!({
-        "type": "object",
-        "properties": {},
-        "additionalProperties": true
-    }))
+    use wasmtime::component::types::ComponentItem;
+
+    let component_type = component.component_type();
+    let mut has_execute = false;
+    let mut has_schema = false;
+    let mut param_names: Vec<String> = Vec::new();
+
+    for (name, item) in component_type.exports(engine) {
+        match name {
+            "execute" => {
+                has_execute = true;
+                if let ComponentItem::ComponentFunc(func) = &item {
+                    param_names = func.params().map(|(n, _)| n.to_string()).collect();
+                }
+            }
+            "schema" => {
+                has_schema = true;
+            }
+            _ => {}
+        }
+    }
+
+    if !has_execute {
+        tracing::warn!(
+            "Component missing 'execute' export — may not conform to tool WIT interface"
+        );
+    }
+
+    if has_schema {
+        tracing::debug!("Component exports 'schema' function (requires instantiation to call)");
+    }
+
+    // Build a schema from execute parameter names when available.
+    // This gives tools a better default than an empty schema.
+    if !param_names.is_empty() {
+        let properties: serde_json::Map<String, serde_json::Value> = param_names
+            .iter()
+            .map(|name| (name.clone(), serde_json::json!({ "type": "string" })))
+            .collect();
+
+        Ok(serde_json::json!({
+            "type": "object",
+            "properties": properties,
+            "additionalProperties": true
+        }))
+    } else {
+        Ok(serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+        }))
+    }
 }
 
 impl std::fmt::Debug for WasmToolRuntime {

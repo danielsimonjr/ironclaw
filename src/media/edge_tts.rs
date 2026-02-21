@@ -7,7 +7,9 @@
 //! and returns audio in MP3 format.
 
 use async_trait::async_trait;
+use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use tokio_tungstenite::tungstenite;
 
 use crate::error::MediaError;
 use crate::media::tts::{TtsFormat, TtsProvider, TtsVoice, VoiceGender};
@@ -207,15 +209,97 @@ impl TtsProvider for EdgeTtsProvider {
         }
 
         // Build SSML
-        let _ssml = Self::build_ssml(text, &voice.name);
+        let ssml = Self::build_ssml(text, &voice.name);
 
-        // TODO: Connect to Edge TTS WebSocket endpoint and stream audio
-        // For now, return an error indicating the WebSocket transport is not yet connected
-        Err(MediaError::ProcessingFailed {
-            reason: "Edge TTS WebSocket transport not yet connected. \
-                     Install tokio-tungstenite for WebSocket support."
-                .to_string(),
-        })
+        // Generate a request ID for correlating messages
+        let request_id = uuid::Uuid::new_v4().to_string().replace('-', "");
+
+        // Build the WebSocket URL with required query parameters
+        let ws_url = format!(
+            "{}?TrustedClientToken=6A5AA1D4EAFF4E9FB37E23D68491D6F4&ConnectionId={}",
+            self.endpoint, request_id
+        );
+
+        // Connect to the Edge TTS WebSocket endpoint
+        let (ws_stream, _response) =
+            tokio_tungstenite::connect_async(&ws_url)
+                .await
+                .map_err(|e| MediaError::ProcessingFailed {
+                    reason: format!("Failed to connect to Edge TTS WebSocket: {}", e),
+                })?;
+
+        let (mut write, mut read) = ws_stream.split();
+
+        // Send configuration message
+        let config_msg = format!(
+            "X-Timestamp:{}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n\
+            {{\"context\":{{\"synthesis\":{{\"audio\":{{\"metadataoptions\":{{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"}},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}}}}}",
+            chrono::Utc::now().format("%a %b %d %Y %H:%M:%S GMT+0000 (Coordinated Universal Time)")
+        );
+
+        write
+            .send(tungstenite::Message::Text(config_msg.into()))
+            .await
+            .map_err(|e| MediaError::ProcessingFailed {
+                reason: format!("Failed to send config to Edge TTS: {}", e),
+            })?;
+
+        // Send SSML synthesis request
+        let ssml_msg = format!(
+            "X-RequestId:{}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:{}\r\nPath:ssml\r\n\r\n{}",
+            request_id,
+            chrono::Utc::now().format("%a %b %d %Y %H:%M:%S GMT+0000 (Coordinated Universal Time)"),
+            ssml
+        );
+
+        write
+            .send(tungstenite::Message::Text(ssml_msg.into()))
+            .await
+            .map_err(|e| MediaError::ProcessingFailed {
+                reason: format!("Failed to send SSML to Edge TTS: {}", e),
+            })?;
+
+        // Collect audio data from response messages
+        let mut audio_data = Vec::new();
+        let audio_header = b"Path:audio\r\n";
+
+        while let Some(msg) = read.next().await {
+            let msg = msg.map_err(|e| MediaError::ProcessingFailed {
+                reason: format!("Edge TTS WebSocket error: {}", e),
+            })?;
+
+            match msg {
+                tungstenite::Message::Binary(data) => {
+                    // Binary messages contain audio data after a header section.
+                    // The header ends after "Path:audio\r\n" followed by a 2-byte length prefix.
+                    if let Some(pos) = data
+                        .windows(audio_header.len())
+                        .position(|w| w == audio_header)
+                    {
+                        let audio_start = pos + audio_header.len();
+                        if audio_start < data.len() {
+                            audio_data.extend_from_slice(&data[audio_start..]);
+                        }
+                    }
+                }
+                tungstenite::Message::Text(text_msg) => {
+                    // "turn.end" signals the synthesis is complete
+                    if text_msg.contains("turn.end") {
+                        break;
+                    }
+                }
+                tungstenite::Message::Close(_) => break,
+                _ => {}
+            }
+        }
+
+        if audio_data.is_empty() {
+            return Err(MediaError::ProcessingFailed {
+                reason: "Edge TTS returned no audio data".to_string(),
+            });
+        }
+
+        Ok(audio_data)
     }
 
     fn name(&self) -> &str {
@@ -450,19 +534,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_synthesize_returns_error_for_unimplemented_transport() {
+    async fn test_synthesize_fails_gracefully_without_network() {
+        // In CI/test environments without network, the WebSocket connection
+        // will fail with a connection error rather than silently returning empty data.
         let provider = EdgeTtsProvider::new();
         let voice = TtsVoice::new("en-US-AriaNeural", "en-US", VoiceGender::Female);
         let result = provider
             .synthesize("Hello world", &voice, TtsFormat::Mp3)
             .await;
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(
-            err.contains("WebSocket"),
-            "Error should mention WebSocket: {}",
-            err
-        );
+        // In test environments, this will either succeed (with network) or
+        // fail with a connection error (without network). Either is valid.
+        if let Err(e) = &result {
+            let err = e.to_string();
+            assert!(
+                err.contains("Edge TTS") || err.contains("WebSocket") || err.contains("connect"),
+                "Error should mention connection failure: {}",
+                err
+            );
+        }
     }
 
     #[test]
