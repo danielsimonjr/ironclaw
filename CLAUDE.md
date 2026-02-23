@@ -50,7 +50,7 @@ Channels (REPL, HTTP, WASM, Web Gateway)
 
 | Trait | Location | Purpose |
 |-------|----------|---------|
-| `Database` | `src/db/mod.rs` | ~75 async methods for all persistence. **Both backends must be updated for new features.** |
+| `Database` | `src/db/mod.rs` | ~91 async methods for all persistence. **Both backends must be updated for new features.** |
 | `Channel` | `src/channels/channel.rs` | Input sources (REPL, HTTP, WASM, web gateway) |
 | `Tool` | `src/tools/tool.rs` | Executable capabilities (built-in, WASM, MCP) |
 | `LlmProvider` | `src/llm/provider.rs` | LLM backends (NEAR AI, OpenAI, Anthropic, Gemini, Bedrock, Ollama, OpenRouter) |
@@ -59,14 +59,14 @@ Channels (REPL, HTTP, WASM, Web Gateway)
 
 ### Source Modules
 
-The codebase has 28 public modules (`src/lib.rs`), grouped by domain:
+The codebase has 30 public modules (`src/lib.rs`), grouped by domain:
 
 - **Core**: `agent` (loop, routing, scheduling, session mgmt, self-repair, heartbeat), `config`, `context`, `error`, `worker`, `orchestrator`
 - **I/O**: `channels` (REPL, HTTP, WASM, web gateway), `llm` (7 providers, failover, cost tracking), `media` (image, PDF, audio, video, TTS)
 - **Persistence**: `db` (dual PostgreSQL/libSQL), `workspace` (memory, hybrid search, embeddings), `history`, `settings`, `secrets`
 - **Safety**: `safety` (sanitizer → validator → policy, leak detection, ACLs, OAuth), `sandbox` (Docker, network proxy)
 - **Extensions**: `tools` (registry, built-in/WASM/MCP), `extensions` (discovery, install, ClawHub), `hooks` (lifecycle events, webhooks), `skills`
-- **Support**: `cli`, `bootstrap`, `setup`, `pairing`, `estimation`, `evaluation`, `hot_reload`, `tracing_fmt`, `util`
+- **Support**: `cli`, `bootstrap`, `setup`, `pairing`, `estimation`, `evaluation`, `hot_reload`, `tracing_fmt`, `util`, `prelude`
 
 ### Startup Sequence (main.rs)
 
