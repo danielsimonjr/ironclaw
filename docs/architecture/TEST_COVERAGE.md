@@ -1,14 +1,14 @@
 # Test Coverage Analysis
 
-**Generated**: 2026-02-22
+**Generated**: 2026-02-23
 
 ## Summary
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 1,973 |
-| Source Files with Tests | 194 |
-| Test Modules | 22 |
+| Total Tests | 2,103 |
+| Source Files with Tests | 203 |
+| Test Modules | 23 |
 | Pre-existing Failures | 11 (Windows-specific) |
 
 All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convention at the bottom of each source file. Async tests use `#[tokio::test]`. There are no separate test files or directories.
@@ -37,7 +37,7 @@ All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convent
          / Integration\ (Agent, Worker, Orchestrator: 276 tests)
         /______________\
        /                \
-      /    Unit Tests    \ (Channels, Tools, Safety, LLM, etc.: 1,677 tests)
+      /    Unit Tests    \ (Channels, Tools, Safety, LLM, etc.: 1,807 tests)
      /____________________\
 ```
 
@@ -48,18 +48,18 @@ All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convent
 | Module | Tests | Files | Description |
 |--------|------:|------:|-------------|
 | channels | 472 | 34 | REPL, HTTP, WASM, web gateway, SSE, PID lock |
-| tools | 274 | 34 | Built-in tools, WASM tools, MCP, tool registry |
+| tools | 348 | 40 | Built-in tools, WASM tools, MCP, tool registry |
 | agent | 240 | 20 | Agent loop, routing, scheduling, session mgmt, self-repair, heartbeat |
 | media | 150 | 11 | Image, PDF, audio, video, TTS processing |
 | safety | 129 | 11 | Sanitizer, validator, policy, leak detection, ACLs, OAuth |
 | llm | 101 | 13 | Provider trait, failover, cost tracking, 7 backends |
-| (root) | 72 | 6 | Top-level modules (config, lib, util) |
+| (root) | 108 | 7 | Top-level modules (config, error, lib, util) |
 | cli | 70 | 8 | CLI commands and output formatting |
 | hooks | 63 | 6 | Lifecycle hooks, bundled hooks, webhooks |
 | skills | 61 | 2 | Skill definition and execution |
 | workspace | 60 | 8 | Memory, hybrid search, embeddings |
 | extensions | 59 | 6 | Discovery, install, ClawHub |
-| sandbox | 36 | 8 | Docker sandbox, network proxy |
+| sandbox | 48 | 9 | Docker sandbox, network proxy, error types |
 | context | 35 | 3 | Token/time/cost tracking |
 | estimation | 32 | 5 | Job estimation |
 | pairing | 27 | 2 | Device pairing |
@@ -68,8 +68,9 @@ All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convent
 | db | 20 | 1 | Database trait and migrations |
 | orchestrator | 13 | 3 | Job orchestration |
 | setup | 10 | 3 | First-run setup |
+| history | 8 | 1 | Analytics structs |
 | evaluation | 5 | 2 | Success evaluation |
-| **Total** | **1,973** | **194** | |
+| **Total** | **2,103** | **203** | |
 
 ---
 
@@ -87,7 +88,7 @@ The largest test module. Covers all input channel implementations and the web ga
 | `src/channels/wasm_channel.rs` | Yes |
 | `src/channels/web/*.rs` | Yes (multiple files) |
 
-### tools (274 tests, 34 files)
+### tools (348 tests, 40 files)
 
 Covers the tool trait, registry, and built-in tool implementations.
 
@@ -95,13 +96,14 @@ Covers the tool trait, registry, and built-in tool implementations.
 |-------------|-----------|
 | `src/tools/tool.rs` | Yes |
 | `src/tools/registry.rs` | Yes |
+| `src/tools/builtin/echo.rs` | Yes |
+| `src/tools/builtin/time.rs` | Yes |
+| `src/tools/builtin/restaurant.rs` | Yes |
+| `src/tools/builtin/marketplace.rs` | Yes |
+| `src/tools/builtin/taskrabbit.rs` | Yes |
+| `src/tools/builtin/ecommerce.rs` | Yes |
 | `src/tools/builtin/*.rs` | Yes (most files) |
-| `src/tools/builtin/routine.rs` | **No** (654 lines) |
-| `src/tools/builtin/restaurant.rs` | **No** (172 lines) |
-| `src/tools/builtin/marketplace.rs` | **No** (160 lines) |
-| `src/tools/builtin/taskrabbit.rs` | **No** (157 lines) |
-| `src/tools/builtin/ecommerce.rs` | **No** (136 lines) |
-| `src/tools/builtin/time.rs` | **No** (134 lines) |
+| `src/tools/builtin/routine.rs` | **No** (654 lines, requires Database/RoutineEngine) |
 
 ### agent (240 tests, 20 files)
 
@@ -184,7 +186,7 @@ Covers the `Database` trait. Both backend implementations lack direct tests.
 |--------|------:|------:|-------|
 | skills | 61 | 2 | Skill definition and execution |
 | extensions | 59 | 6 | Discovery, install, ClawHub |
-| sandbox | 36 | 8 | Docker sandbox, network proxy |
+| sandbox | 48 | 9 | Docker sandbox, network proxy, error types |
 | context | 35 | 3 | Token/time/cost tracking |
 | estimation | 32 | 5 | Job estimation |
 | pairing | 27 | 2 | Device pairing (7 Windows failures) |
@@ -192,6 +194,7 @@ Covers the `Database` trait. Both backend implementations lack direct tests.
 | secrets | 21 | 4 | Secret storage |
 | orchestrator | 13 | 3 | Job orchestration |
 | setup | 10 | 3 | First-run setup |
+| history | 8 | 1 | Analytics structs |
 | evaluation | 5 | 2 | Success evaluation |
 
 ---
@@ -209,30 +212,25 @@ Files without tests, sorted by priority (size and importance):
 | `src/workspace/repository.rs` | 910 | Workspace persistence layer |
 | `src/db/postgres.rs` | 724 | PostgreSQL backend implementation |
 | `src/db/libsql_migrations.rs` | 625 | libSQL migration definitions |
-| `src/error.rs` | 441 | Error type definitions |
 
 ### High (Feature Modules)
 
 | File | Lines | Why It Matters |
 |------|------:|----------------|
-| `src/tools/builtin/routine.rs` | 654 | Routine/cron tool |
-| `src/history/analytics.rs` | 226 | Usage analytics |
+| `src/tools/builtin/routine.rs` | 654 | Routine/cron tool (requires Database/RoutineEngine) |
 | `src/cli/hooks.rs` | 234 | CLI hooks subcommand |
 | `src/cli/cron.rs` | 231 | CLI cron subcommand |
 | `src/cli/gateway.rs` | 212 | CLI gateway subcommand |
 | `src/cli/status.rs` | 200 | CLI status subcommand |
 | `src/cli/logs.rs` | 193 | CLI logs subcommand |
 
-### Medium (Built-in Tools)
+### Medium (CLI Subcommands)
 
 | File | Lines | Why It Matters |
 |------|------:|----------------|
-| `src/tools/builtin/restaurant.rs` | 172 | Restaurant tool |
-| `src/tools/builtin/marketplace.rs` | 160 | Marketplace tool |
-| `src/tools/builtin/taskrabbit.rs` | 157 | TaskRabbit tool |
 | `src/cli/sessions.rs` | 151 | CLI sessions subcommand |
-| `src/tools/builtin/ecommerce.rs` | 136 | E-commerce tool |
-| `src/tools/builtin/time.rs` | 134 | Time tool |
+| `src/cli/message.rs` | 97 | CLI message subcommand |
+| `src/cli/skills.rs` | 93 | CLI skills subcommand |
 
 ---
 
@@ -302,6 +300,6 @@ From `CLAUDE.md`:
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-02-22
+**Document Version**: 1.1
+**Last Updated**: 2026-02-23
 **Maintained By**: Daniel Simon Jr.
