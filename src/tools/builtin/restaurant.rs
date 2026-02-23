@@ -170,3 +170,136 @@ impl Tool for RestaurantTool {
         true // External restaurant data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::tool::Tool;
+    use serde_json::json;
+
+    fn tool() -> RestaurantTool {
+        RestaurantTool::new()
+    }
+
+    fn ctx() -> JobContext {
+        JobContext::new("test", "test")
+    }
+
+    #[test]
+    fn test_name() {
+        assert_eq!(tool().name(), "restaurant");
+    }
+
+    #[test]
+    fn test_description() {
+        assert!(!tool().description().is_empty());
+    }
+
+    #[test]
+    fn test_schema_has_action() {
+        let schema = tool().parameters_schema();
+        assert!(schema["properties"]["action"]["enum"].is_array());
+        assert_eq!(schema["required"][0], "action");
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let t = RestaurantTool::default();
+        assert_eq!(t.name(), "restaurant");
+    }
+
+    #[test]
+    fn test_requires_sanitization() {
+        assert!(tool().requires_sanitization());
+    }
+
+    #[tokio::test]
+    async fn test_search_action() {
+        let result = tool()
+            .execute(json!({"action": "search", "query": "italian"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["query"], "italian");
+        assert_eq!(data["message"], "Restaurant integration not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_search_no_query() {
+        let result = tool()
+            .execute(json!({"action": "search"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["query"], "");
+    }
+
+    #[tokio::test]
+    async fn test_check_availability() {
+        let result = tool()
+            .execute(json!({"action": "check_availability", "restaurant_id": "r123"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["restaurant_id"], "r123");
+        assert_eq!(data["message"], "Restaurant integration not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_check_availability_missing_id() {
+        let err = tool()
+            .execute(json!({"action": "check_availability"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_make_reservation() {
+        let result = tool()
+            .execute(json!({"action": "make_reservation"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["success"], false);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_reservation() {
+        let result = tool()
+            .execute(json!({"action": "cancel_reservation"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["cancelled"], false);
+    }
+
+    #[tokio::test]
+    async fn test_get_reservation() {
+        let result = tool()
+            .execute(json!({"action": "get_reservation", "reservation_id": "res1"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["reservation_id"], "res1");
+        assert_eq!(data["found"], false);
+    }
+
+    #[tokio::test]
+    async fn test_missing_action() {
+        let err = tool()
+            .execute(json!({}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_action() {
+        let err = tool()
+            .execute(json!({"action": "fly"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+}

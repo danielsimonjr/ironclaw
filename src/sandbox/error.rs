@@ -56,3 +56,109 @@ pub enum SandboxError {
 
 /// Result type for sandbox operations.
 pub type Result<T> = std::result::Result<T, SandboxError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_docker_not_available_display() {
+        let err = SandboxError::DockerNotAvailable {
+            reason: "daemon not running".to_string(),
+        };
+        assert!(err.to_string().contains("daemon not running"));
+        assert!(err.to_string().contains("Docker not available"));
+    }
+
+    #[test]
+    fn test_container_creation_failed_display() {
+        let err = SandboxError::ContainerCreationFailed {
+            reason: "image not found".to_string(),
+        };
+        assert!(err.to_string().contains("image not found"));
+    }
+
+    #[test]
+    fn test_container_start_failed_display() {
+        let err = SandboxError::ContainerStartFailed {
+            reason: "port conflict".to_string(),
+        };
+        assert!(err.to_string().contains("port conflict"));
+    }
+
+    #[test]
+    fn test_execution_failed_display() {
+        let err = SandboxError::ExecutionFailed {
+            reason: "exit code 1".to_string(),
+        };
+        assert!(err.to_string().contains("exit code 1"));
+    }
+
+    #[test]
+    fn test_timeout_display() {
+        let err = SandboxError::Timeout(Duration::from_secs(30));
+        let msg = err.to_string();
+        assert!(msg.contains("timed out"));
+        assert!(msg.contains("30"));
+    }
+
+    #[test]
+    fn test_resource_limit_exceeded_display() {
+        let err = SandboxError::ResourceLimitExceeded {
+            resource: "memory".to_string(),
+            limit: "512MB".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("memory"));
+        assert!(msg.contains("512MB"));
+    }
+
+    #[test]
+    fn test_proxy_error_display() {
+        let err = SandboxError::ProxyError {
+            reason: "upstream timeout".to_string(),
+        };
+        assert!(err.to_string().contains("upstream timeout"));
+    }
+
+    #[test]
+    fn test_network_blocked_display() {
+        let err = SandboxError::NetworkBlocked {
+            reason: "domain not in allowlist".to_string(),
+        };
+        assert!(err.to_string().contains("domain not in allowlist"));
+    }
+
+    #[test]
+    fn test_credential_injection_failed_display() {
+        let err = SandboxError::CredentialInjectionFailed {
+            domain: "api.example.com".to_string(),
+            reason: "secret not found".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("api.example.com"));
+        assert!(msg.contains("secret not found"));
+    }
+
+    #[test]
+    fn test_config_error_display() {
+        let err = SandboxError::Config {
+            reason: "missing image name".to_string(),
+        };
+        assert!(err.to_string().contains("missing image name"));
+    }
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
+        let err = SandboxError::from(io_err);
+        assert!(err.to_string().contains("access denied"));
+    }
+
+    #[test]
+    fn test_debug_is_implemented() {
+        let err = SandboxError::Timeout(Duration::from_secs(5));
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("Timeout"));
+    }
+}

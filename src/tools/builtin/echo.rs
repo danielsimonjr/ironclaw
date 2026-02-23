@@ -52,3 +52,54 @@ impl Tool for EchoTool {
         false // Internal tool, no external data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {
+        let tool = EchoTool;
+        assert_eq!(tool.name(), "echo");
+    }
+
+    #[test]
+    fn test_description_is_non_empty() {
+        let tool = EchoTool;
+        assert!(!tool.description().is_empty());
+    }
+
+    #[test]
+    fn test_parameters_schema_has_message() {
+        let tool = EchoTool;
+        let schema = tool.parameters_schema();
+        let props = schema.get("properties").unwrap();
+        assert!(props.get("message").is_some());
+        let required = schema.get("required").unwrap().as_array().unwrap();
+        assert!(required.iter().any(|v| v.as_str() == Some("message")));
+    }
+
+    #[tokio::test]
+    async fn test_execute_valid_message() {
+        let tool = EchoTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({"message": "hello world"});
+        let output = tool.execute(params, &ctx).await.unwrap();
+        assert_eq!(output.result.as_str().unwrap(), "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_execute_missing_message() {
+        let tool = EchoTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({});
+        let err = tool.execute(params, &ctx).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[test]
+    fn test_requires_sanitization_false() {
+        let tool = EchoTool;
+        assert!(!tool.requires_sanitization());
+    }
+}

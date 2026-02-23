@@ -155,3 +155,135 @@ impl Tool for TaskRabbitTool {
         true // External TaskRabbit data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::tool::Tool;
+    use rust_decimal::Decimal;
+    use serde_json::json;
+
+    fn tool() -> TaskRabbitTool {
+        TaskRabbitTool::new()
+    }
+
+    fn ctx() -> JobContext {
+        JobContext::new("test", "test")
+    }
+
+    #[test]
+    fn test_name() {
+        assert_eq!(tool().name(), "taskrabbit");
+    }
+
+    #[test]
+    fn test_description() {
+        assert!(!tool().description().is_empty());
+    }
+
+    #[test]
+    fn test_schema_has_action() {
+        let schema = tool().parameters_schema();
+        assert!(schema["properties"]["action"]["enum"].is_array());
+        assert_eq!(schema["required"][0], "action");
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let t = TaskRabbitTool::default();
+        assert_eq!(t.name(), "taskrabbit");
+    }
+
+    #[test]
+    fn test_requires_sanitization() {
+        assert!(tool().requires_sanitization());
+    }
+
+    #[test]
+    fn test_estimated_cost_book_task_with_budget() {
+        let cost = tool().estimated_cost(&json!({"action": "book_task", "budget": 50.0}));
+        assert_eq!(cost, Some(Decimal::new(50, 0)));
+    }
+
+    #[test]
+    fn test_estimated_cost_book_task_no_budget() {
+        let cost = tool().estimated_cost(&json!({"action": "book_task"}));
+        assert_eq!(cost, None);
+    }
+
+    #[test]
+    fn test_estimated_cost_other_action() {
+        assert_eq!(tool().estimated_cost(&json!({"action": "search_taskers"})), None);
+        assert_eq!(tool().estimated_cost(&json!({"action": "get_quote"})), None);
+    }
+
+    #[tokio::test]
+    async fn test_search_taskers() {
+        let result = tool()
+            .execute(json!({"action": "search_taskers"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert!(data["taskers"].is_array());
+        assert_eq!(data["message"], "TaskRabbit integration not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_get_quote() {
+        let result = tool()
+            .execute(json!({"action": "get_quote"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert!(data["quotes"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_book_task() {
+        let result = tool()
+            .execute(json!({"action": "book_task"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["booked"], false);
+    }
+
+    #[tokio::test]
+    async fn test_get_status() {
+        let result = tool()
+            .execute(json!({"action": "get_status", "task_id": "t1"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["task_id"], "t1");
+        assert_eq!(data["status"], "unknown");
+    }
+
+    #[tokio::test]
+    async fn test_cancel_task() {
+        let result = tool()
+            .execute(json!({"action": "cancel_task"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["cancelled"], false);
+    }
+
+    #[tokio::test]
+    async fn test_missing_action() {
+        let err = tool()
+            .execute(json!({}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_action() {
+        let err = tool()
+            .execute(json!({"action": "teleport"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+}

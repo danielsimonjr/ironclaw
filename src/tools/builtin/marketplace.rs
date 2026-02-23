@@ -158,3 +158,149 @@ impl Tool for MarketplaceTool {
         true // External marketplace data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::tool::Tool;
+    use rust_decimal::Decimal;
+    use serde_json::json;
+
+    fn tool() -> MarketplaceTool {
+        MarketplaceTool::new()
+    }
+
+    fn ctx() -> JobContext {
+        JobContext::new("test", "test")
+    }
+
+    #[test]
+    fn test_name() {
+        assert_eq!(tool().name(), "marketplace");
+    }
+
+    #[test]
+    fn test_description() {
+        assert!(!tool().description().is_empty());
+    }
+
+    #[test]
+    fn test_schema_has_action() {
+        let schema = tool().parameters_schema();
+        assert!(schema["properties"]["action"]["enum"].is_array());
+        assert_eq!(schema["required"][0], "action");
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let t = MarketplaceTool::default();
+        assert_eq!(t.name(), "marketplace");
+    }
+
+    #[test]
+    fn test_requires_sanitization() {
+        assert!(tool().requires_sanitization());
+    }
+
+    #[test]
+    fn test_estimated_cost_submit_bid() {
+        let cost = tool().estimated_cost(&json!({"action": "submit_bid"}));
+        assert_eq!(cost, Some(Decimal::new(1, 2)));
+    }
+
+    #[test]
+    fn test_estimated_cost_other_actions() {
+        assert_eq!(tool().estimated_cost(&json!({"action": "search_jobs"})), None);
+        assert_eq!(tool().estimated_cost(&json!({"action": "get_job"})), None);
+        assert_eq!(tool().estimated_cost(&json!({"action": "get_status"})), None);
+    }
+
+    #[tokio::test]
+    async fn test_search_jobs() {
+        let result = tool()
+            .execute(json!({"action": "search_jobs"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["total"], 0);
+        assert_eq!(data["message"], "Marketplace integration not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_get_job() {
+        let result = tool()
+            .execute(json!({"action": "get_job", "job_id": "j1"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["job_id"], "j1");
+        assert_eq!(data["status"], "not_found");
+    }
+
+    #[tokio::test]
+    async fn test_get_job_missing_id() {
+        let err = tool()
+            .execute(json!({"action": "get_job"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_submit_bid() {
+        let result = tool()
+            .execute(json!({"action": "submit_bid"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["success"], false);
+    }
+
+    #[tokio::test]
+    async fn test_accept_job() {
+        let result = tool()
+            .execute(json!({"action": "accept_job"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["success"], false);
+    }
+
+    #[tokio::test]
+    async fn test_submit_work() {
+        let result = tool()
+            .execute(json!({"action": "submit_work"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["success"], false);
+    }
+
+    #[tokio::test]
+    async fn test_get_status() {
+        let result = tool()
+            .execute(json!({"action": "get_status"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["connected"], false);
+    }
+
+    #[tokio::test]
+    async fn test_missing_action() {
+        let err = tool()
+            .execute(json!({}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_action() {
+        let err = tool()
+            .execute(json!({"action": "destroy"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+}

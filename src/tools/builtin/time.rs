@@ -132,3 +132,112 @@ impl Tool for TimeTool {
         false // Internal tool, no external data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {
+        let tool = TimeTool;
+        assert_eq!(tool.name(), "time");
+    }
+
+    #[test]
+    fn test_parameters_schema_has_operation_required() {
+        let tool = TimeTool;
+        let schema = tool.parameters_schema();
+        let required = schema.get("required").unwrap().as_array().unwrap();
+        assert!(required.iter().any(|v| v.as_str() == Some("operation")));
+    }
+
+    #[tokio::test]
+    async fn test_execute_now() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({"operation": "now"});
+        let output = tool.execute(params, &ctx).await.unwrap();
+        assert!(output.result.get("iso").is_some());
+        assert!(output.result.get("unix").is_some());
+        assert!(output.result.get("unix_millis").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_execute_parse_valid() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({
+            "operation": "parse",
+            "timestamp": "2024-01-15T10:30:00Z"
+        });
+        let output = tool.execute(params, &ctx).await.unwrap();
+        assert!(output.result.get("iso").is_some());
+        assert!(output.result.get("unix").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_execute_parse_invalid_timestamp() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({
+            "operation": "parse",
+            "timestamp": "not-a-timestamp"
+        });
+        let err = tool.execute(params, &ctx).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_execute_diff_valid() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({
+            "operation": "diff",
+            "timestamp": "2024-01-15T10:00:00Z",
+            "timestamp2": "2024-01-15T11:30:00Z"
+        });
+        let output = tool.execute(params, &ctx).await.unwrap();
+        assert_eq!(output.result.get("seconds").unwrap().as_i64().unwrap(), 5400);
+        assert_eq!(output.result.get("minutes").unwrap().as_i64().unwrap(), 90);
+        assert_eq!(output.result.get("hours").unwrap().as_i64().unwrap(), 1);
+        assert_eq!(output.result.get("days").unwrap().as_i64().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_execute_diff_missing_timestamp2() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({
+            "operation": "diff",
+            "timestamp": "2024-01-15T10:00:00Z"
+        });
+        let err = tool.execute(params, &ctx).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+        assert!(err.to_string().contains("timestamp2"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_unknown_operation() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({"operation": "format"});
+        let err = tool.execute(params, &ctx).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+        assert!(err.to_string().contains("unknown operation"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_missing_operation() {
+        let tool = TimeTool;
+        let ctx = JobContext::new("test", "test");
+        let params = serde_json::json!({});
+        let err = tool.execute(params, &ctx).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[test]
+    fn test_requires_sanitization_false() {
+        let tool = TimeTool;
+        assert!(!tool.requires_sanitization());
+    }
+}

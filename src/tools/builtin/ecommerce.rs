@@ -134,3 +134,125 @@ impl Tool for EcommerceTool {
         true // External e-commerce data
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::tool::Tool;
+    use serde_json::json;
+
+    fn tool() -> EcommerceTool {
+        EcommerceTool::new()
+    }
+
+    fn ctx() -> JobContext {
+        JobContext::new("test", "test")
+    }
+
+    #[test]
+    fn test_name() {
+        assert_eq!(tool().name(), "ecommerce");
+    }
+
+    #[test]
+    fn test_description() {
+        assert!(!tool().description().is_empty());
+    }
+
+    #[test]
+    fn test_schema_has_action() {
+        let schema = tool().parameters_schema();
+        assert!(schema["properties"]["action"]["enum"].is_array());
+        assert_eq!(schema["required"][0], "action");
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let t = EcommerceTool::default();
+        assert_eq!(t.name(), "ecommerce");
+    }
+
+    #[test]
+    fn test_requires_sanitization() {
+        assert!(tool().requires_sanitization());
+    }
+
+    #[tokio::test]
+    async fn test_search() {
+        let result = tool()
+            .execute(json!({"action": "search", "query": "laptop"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["query"], "laptop");
+        assert_eq!(data["message"], "E-commerce integration not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_search_no_query() {
+        let result = tool()
+            .execute(json!({"action": "search"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["query"], "");
+    }
+
+    #[tokio::test]
+    async fn test_get_product() {
+        let result = tool()
+            .execute(json!({"action": "get_product", "product_id": "B001"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["product_id"], "B001");
+        assert_eq!(data["found"], false);
+    }
+
+    #[tokio::test]
+    async fn test_get_product_missing_id() {
+        let err = tool()
+            .execute(json!({"action": "get_product"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_compare_prices() {
+        let result = tool()
+            .execute(json!({"action": "compare_prices"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert!(data["prices"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_track_price() {
+        let result = tool()
+            .execute(json!({"action": "track_price"}), &ctx())
+            .await
+            .unwrap();
+        let data = &result.result;
+        assert_eq!(data["tracking"], false);
+    }
+
+    #[tokio::test]
+    async fn test_missing_action() {
+        let err = tool()
+            .execute(json!({}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_action() {
+        let err = tool()
+            .execute(json!({"action": "refund"}), &ctx())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidParameters(_)));
+    }
+}

@@ -224,3 +224,147 @@ pub struct CategoryHistoryEntry {
     pub actual_time_secs: Option<i32>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+    use rust_decimal::Decimal;
+
+    #[test]
+    fn test_job_stats_default() {
+        let stats = JobStats::default();
+        assert_eq!(stats.total_jobs, 0);
+        assert_eq!(stats.completed_jobs, 0);
+        assert_eq!(stats.failed_jobs, 0);
+        assert_eq!(stats.success_rate, 0.0);
+        assert_eq!(stats.avg_duration_secs, 0.0);
+        assert_eq!(stats.avg_cost, Decimal::ZERO);
+        assert_eq!(stats.total_cost, Decimal::ZERO);
+    }
+
+    #[test]
+    fn test_estimation_accuracy_default() {
+        let acc = EstimationAccuracy::default();
+        assert_eq!(acc.cost_error_rate, 0.0);
+        assert_eq!(acc.time_error_rate, 0.0);
+        assert_eq!(acc.sample_count, 0);
+    }
+
+    #[test]
+    fn test_job_stats_with_values() {
+        let stats = JobStats {
+            total_jobs: 100,
+            completed_jobs: 85,
+            failed_jobs: 15,
+            success_rate: 0.85,
+            avg_duration_secs: 12.5,
+            avg_cost: Decimal::new(150, 2),
+            total_cost: Decimal::new(15000, 2),
+        };
+        assert_eq!(stats.total_jobs, 100);
+        assert_eq!(stats.completed_jobs, 85);
+        assert_eq!(stats.failed_jobs, 15);
+        assert!((stats.success_rate - 0.85).abs() < f64::EPSILON);
+        assert!((stats.avg_duration_secs - 12.5).abs() < f64::EPSILON);
+        assert_eq!(stats.avg_cost, Decimal::new(150, 2));
+        assert_eq!(stats.total_cost, Decimal::new(15000, 2));
+    }
+
+    #[test]
+    fn test_tool_stats_with_values() {
+        let stats = ToolStats {
+            tool_name: "shell".to_string(),
+            total_calls: 50,
+            successful_calls: 45,
+            failed_calls: 5,
+            success_rate: 0.9,
+            avg_duration_ms: 250.0,
+            total_cost: Decimal::new(500, 2),
+        };
+        assert_eq!(stats.tool_name, "shell");
+        assert_eq!(stats.total_calls, 50);
+        assert_eq!(stats.successful_calls, 45);
+        assert_eq!(stats.failed_calls, 5);
+        assert!((stats.success_rate - 0.9).abs() < f64::EPSILON);
+        assert!((stats.avg_duration_ms - 250.0).abs() < f64::EPSILON);
+        assert_eq!(stats.total_cost, Decimal::new(500, 2));
+    }
+
+    #[test]
+    fn test_estimation_accuracy_with_values() {
+        let acc = EstimationAccuracy {
+            cost_error_rate: 0.15,
+            time_error_rate: 0.22,
+            sample_count: 42,
+        };
+        assert!((acc.cost_error_rate - 0.15).abs() < f64::EPSILON);
+        assert!((acc.time_error_rate - 0.22).abs() < f64::EPSILON);
+        assert_eq!(acc.sample_count, 42);
+    }
+
+    #[test]
+    fn test_category_history_entry_with_none_optionals() {
+        let entry = CategoryHistoryEntry {
+            tool_names: vec!["shell".to_string(), "http".to_string()],
+            estimated_cost: Decimal::new(100, 2),
+            actual_cost: None,
+            estimated_time_secs: 30,
+            actual_time_secs: None,
+            created_at: Utc.with_ymd_and_hms(2025, 1, 15, 10, 0, 0).unwrap(),
+        };
+        assert_eq!(entry.tool_names.len(), 2);
+        assert_eq!(entry.estimated_cost, Decimal::new(100, 2));
+        assert!(entry.actual_cost.is_none());
+        assert_eq!(entry.estimated_time_secs, 30);
+        assert!(entry.actual_time_secs.is_none());
+    }
+
+    #[test]
+    fn test_category_history_entry_with_some_optionals() {
+        let entry = CategoryHistoryEntry {
+            tool_names: vec!["file_read".to_string()],
+            estimated_cost: Decimal::new(200, 2),
+            actual_cost: Some(Decimal::new(180, 2)),
+            estimated_time_secs: 60,
+            actual_time_secs: Some(55),
+            created_at: Utc.with_ymd_and_hms(2025, 6, 1, 12, 30, 0).unwrap(),
+        };
+        assert_eq!(entry.actual_cost, Some(Decimal::new(180, 2)));
+        assert_eq!(entry.actual_time_secs, Some(55));
+    }
+
+    #[test]
+    fn test_debug_formatting() {
+        let job_stats = JobStats::default();
+        let debug_str = format!("{:?}", job_stats);
+        assert!(debug_str.contains("JobStats"));
+
+        let tool_stats = ToolStats {
+            tool_name: "test".to_string(),
+            total_calls: 1,
+            successful_calls: 1,
+            failed_calls: 0,
+            success_rate: 1.0,
+            avg_duration_ms: 10.0,
+            total_cost: Decimal::ZERO,
+        };
+        let debug_str = format!("{:?}", tool_stats);
+        assert!(debug_str.contains("ToolStats"));
+
+        let acc = EstimationAccuracy::default();
+        let debug_str = format!("{:?}", acc);
+        assert!(debug_str.contains("EstimationAccuracy"));
+
+        let entry = CategoryHistoryEntry {
+            tool_names: vec![],
+            estimated_cost: Decimal::ZERO,
+            actual_cost: None,
+            estimated_time_secs: 0,
+            actual_time_secs: None,
+            created_at: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
+        };
+        let debug_str = format!("{:?}", entry);
+        assert!(debug_str.contains("CategoryHistoryEntry"));
+    }
+}

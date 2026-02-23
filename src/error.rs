@@ -439,3 +439,364 @@ pub enum SkillsError {
 
 /// Result type alias for the agent.
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- ConfigError ---
+
+    #[test]
+    fn test_config_error_missing_env_var_display() {
+        let err = ConfigError::MissingEnvVar("DATABASE_URL".to_string());
+        assert!(err.to_string().contains("DATABASE_URL"));
+        assert!(err
+            .to_string()
+            .contains("Missing required environment variable"));
+    }
+
+    #[test]
+    fn test_config_error_missing_required_display() {
+        let err = ConfigError::MissingRequired {
+            key: "api_key".to_string(),
+            hint: "Set API_KEY env var".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("api_key"));
+        assert!(msg.contains("Set API_KEY env var"));
+    }
+
+    #[test]
+    fn test_config_error_invalid_value_display() {
+        let err = ConfigError::InvalidValue {
+            key: "port".to_string(),
+            message: "must be a number".to_string(),
+        };
+        assert!(err.to_string().contains("port"));
+        assert!(err.to_string().contains("must be a number"));
+    }
+
+    #[test]
+    fn test_config_error_parse_error_display() {
+        let err = ConfigError::ParseError("bad toml".to_string());
+        assert!(err.to_string().contains("bad toml"));
+    }
+
+    #[test]
+    fn test_config_error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let err = ConfigError::from(io_err);
+        assert!(err.to_string().contains("file missing"));
+    }
+
+    // --- DatabaseError ---
+
+    #[test]
+    fn test_database_error_not_found_display() {
+        let err = DatabaseError::NotFound {
+            entity: "user".to_string(),
+            id: "abc-123".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("user"));
+        assert!(msg.contains("abc-123"));
+    }
+
+    #[test]
+    fn test_database_error_pool_display() {
+        let err = DatabaseError::Pool("connection refused".to_string());
+        assert!(err.to_string().contains("connection refused"));
+    }
+
+    // --- ChannelError ---
+
+    #[test]
+    fn test_channel_error_startup_failed_display() {
+        let err = ChannelError::StartupFailed {
+            name: "repl".to_string(),
+            reason: "port in use".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("repl"));
+        assert!(msg.contains("port in use"));
+    }
+
+    #[test]
+    fn test_channel_error_rate_limited_display() {
+        let err = ChannelError::RateLimited {
+            name: "telegram".to_string(),
+        };
+        assert!(err.to_string().contains("telegram"));
+    }
+
+    // --- LlmError ---
+
+    #[test]
+    fn test_llm_error_rate_limited_display() {
+        let err = LlmError::RateLimited {
+            provider: "openai".to_string(),
+            retry_after: Some(Duration::from_secs(30)),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("openai"));
+        assert!(msg.contains("30"));
+    }
+
+    #[test]
+    fn test_llm_error_context_length_display() {
+        let err = LlmError::ContextLengthExceeded {
+            used: 50000,
+            limit: 32000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("50000"));
+        assert!(msg.contains("32000"));
+    }
+
+    // --- ToolError ---
+
+    #[test]
+    fn test_tool_error_not_found_display() {
+        let err = ToolError::NotFound {
+            name: "calculator".to_string(),
+        };
+        assert!(err.to_string().contains("calculator"));
+    }
+
+    #[test]
+    fn test_tool_error_timeout_display() {
+        let err = ToolError::Timeout {
+            name: "shell".to_string(),
+            timeout: Duration::from_secs(60),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("shell"));
+        assert!(msg.contains("60"));
+    }
+
+    // --- SafetyError ---
+
+    #[test]
+    fn test_safety_error_injection_detected_display() {
+        let err = SafetyError::InjectionDetected {
+            pattern: "ignore previous".to_string(),
+        };
+        assert!(err.to_string().contains("ignore previous"));
+    }
+
+    #[test]
+    fn test_safety_error_output_too_large_display() {
+        let err = SafetyError::OutputTooLarge {
+            length: 100000,
+            max: 50000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("100000"));
+        assert!(msg.contains("50000"));
+    }
+
+    // --- JobError ---
+
+    #[test]
+    fn test_job_error_not_found_display() {
+        let id = Uuid::new_v4();
+        let err = JobError::NotFound { id };
+        assert!(err.to_string().contains(&id.to_string()));
+    }
+
+    #[test]
+    fn test_job_error_stuck_display() {
+        let id = Uuid::new_v4();
+        let err = JobError::Stuck {
+            id,
+            duration: Duration::from_secs(300),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains(&id.to_string()));
+        assert!(msg.contains("300"));
+    }
+
+    #[test]
+    fn test_job_error_max_jobs_exceeded() {
+        let err = JobError::MaxJobsExceeded { max: 10 };
+        assert!(err.to_string().contains("10"));
+    }
+
+    // --- EstimationError ---
+
+    #[test]
+    fn test_estimation_error_insufficient_data() {
+        let err = EstimationError::InsufficientData {
+            needed: 100,
+            have: 5,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("100"));
+        assert!(msg.contains("5"));
+    }
+
+    // --- EvaluationError ---
+
+    #[test]
+    fn test_evaluation_error_missing_data() {
+        let err = EvaluationError::MissingData {
+            field: "score".to_string(),
+        };
+        assert!(err.to_string().contains("score"));
+    }
+
+    // --- RepairError ---
+
+    #[test]
+    fn test_repair_error_max_attempts() {
+        let id = Uuid::new_v4();
+        let err = RepairError::MaxAttemptsExceeded {
+            target_type: "job".to_string(),
+            target_id: id,
+            max: 3,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("job"));
+        assert!(msg.contains("3"));
+    }
+
+    // --- WorkspaceError ---
+
+    #[test]
+    fn test_workspace_error_document_not_found() {
+        let err = WorkspaceError::DocumentNotFound {
+            doc_type: "IDENTITY.md".to_string(),
+            user_id: "user-1".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("IDENTITY.md"));
+        assert!(msg.contains("user-1"));
+    }
+
+    // --- OrchestratorError ---
+
+    #[test]
+    fn test_orchestrator_error_container_timeout() {
+        let id = Uuid::new_v4();
+        let err = OrchestratorError::ContainerTimeout { job_id: id };
+        assert!(err.to_string().contains(&id.to_string()));
+    }
+
+    // --- WorkerError ---
+
+    #[test]
+    fn test_worker_error_missing_token() {
+        let err = WorkerError::MissingToken;
+        assert!(err.to_string().contains("IRONCLAW_WORKER_TOKEN"));
+    }
+
+    #[test]
+    fn test_worker_error_connection_failed() {
+        let err = WorkerError::ConnectionFailed {
+            url: "http://localhost:50051".to_string(),
+            reason: "refused".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("localhost:50051"));
+        assert!(msg.contains("refused"));
+    }
+
+    // --- HookError ---
+
+    #[test]
+    fn test_hook_error_timeout() {
+        let err = HookError::Timeout {
+            name: "rate_limit".to_string(),
+            timeout_ms: 5000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("rate_limit"));
+        assert!(msg.contains("5000"));
+    }
+
+    // --- MediaError ---
+
+    #[test]
+    fn test_media_error_too_large() {
+        let err = MediaError::TooLarge {
+            size: 1000000,
+            max: 500000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("1000000"));
+        assert!(msg.contains("500000"));
+    }
+
+    #[test]
+    fn test_media_error_max_depth_exceeded() {
+        let err = MediaError::MaxDepthExceeded { max_depth: 5 };
+        assert!(err.to_string().contains("5"));
+    }
+
+    // --- SkillsError ---
+
+    #[test]
+    fn test_skills_error_not_found() {
+        let err = SkillsError::NotFound {
+            name: "summarize".to_string(),
+        };
+        assert!(err.to_string().contains("summarize"));
+    }
+
+    // --- From conversions into top-level Error ---
+
+    #[test]
+    fn test_error_from_config_error() {
+        let inner = ConfigError::MissingEnvVar("TEST".to_string());
+        let err = Error::from(inner);
+        assert!(err.to_string().contains("Configuration error"));
+    }
+
+    #[test]
+    fn test_error_from_database_error() {
+        let inner = DatabaseError::Query("syntax error".to_string());
+        let err = Error::from(inner);
+        assert!(err.to_string().contains("Database error"));
+    }
+
+    #[test]
+    fn test_error_from_tool_error() {
+        let inner = ToolError::NotFound {
+            name: "x".to_string(),
+        };
+        let err = Error::from(inner);
+        assert!(err.to_string().contains("Tool error"));
+    }
+
+    #[test]
+    fn test_error_from_safety_error() {
+        let inner = SafetyError::PolicyViolation {
+            rule: "no-exec".to_string(),
+        };
+        let err = Error::from(inner);
+        assert!(err.to_string().contains("Safety error"));
+    }
+
+    #[test]
+    fn test_error_from_job_error() {
+        let inner = JobError::MaxJobsExceeded { max: 5 };
+        let err = Error::from(inner);
+        assert!(err.to_string().contains("Job error"));
+    }
+
+    // --- Debug trait ---
+
+    #[test]
+    fn test_error_debug_is_implemented() {
+        let err = Error::Config(ConfigError::ParseError("test".to_string()));
+        let debug = format!("{:?}", err);
+        assert!(!debug.is_empty());
+    }
+
+    #[test]
+    fn test_tool_error_debug_is_implemented() {
+        let err = ToolError::BuilderFailed("oops".to_string());
+        let debug = format!("{:?}", err);
+        assert!(!debug.is_empty());
+    }
+}
