@@ -90,3 +90,72 @@ impl WebhookServer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn auto_config() -> WebhookServerConfig {
+        WebhookServerConfig {
+            addr: "127.0.0.1:0".parse().unwrap(),
+        }
+    }
+
+    #[test]
+    fn new_creates_server_and_accepts_routes() {
+        let mut server = WebhookServer::new(auto_config());
+        // Should not panic — server is usable immediately after new().
+        server.add_routes(Router::new());
+    }
+
+    #[test]
+    fn add_routes_multiple_times() {
+        let mut server = WebhookServer::new(auto_config());
+        server.add_routes(Router::new());
+        server.add_routes(Router::new());
+        server.add_routes(Router::new());
+        // Three fragments accumulated without error.
+    }
+
+    #[tokio::test]
+    async fn start_and_shutdown_lifecycle() {
+        let mut server = WebhookServer::new(auto_config());
+        server.add_routes(Router::new());
+        server.start().await.expect("server should start on port 0");
+        assert!(server.handle.is_some());
+        assert!(server.shutdown_tx.is_some());
+        server.shutdown().await;
+        assert!(server.handle.is_none());
+        assert!(server.shutdown_tx.is_none());
+    }
+
+    #[tokio::test]
+    async fn start_on_occupied_port_returns_error() {
+        // Bind a port first so it's occupied.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap();
+        let occupied_addr = listener.local_addr().unwrap();
+
+        let config = WebhookServerConfig {
+            addr: occupied_addr,
+        };
+        let mut server = WebhookServer::new(config);
+        let result = server.start().await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ChannelError::StartupFailed { name, reason } => {
+                assert_eq!(name, "webhook_server");
+                assert!(reason.contains("Failed to bind"));
+            }
+            other => panic!("expected StartupFailed, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn shutdown_when_not_started_is_noop() {
+        let mut server = WebhookServer::new(auto_config());
+        // Should not panic.
+        server.shutdown().await;
+    }
+}

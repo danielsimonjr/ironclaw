@@ -11,7 +11,7 @@ pub enum SessionsCommand {
         user: Option<String>,
 
         /// Filter by channel
-        #[arg(short, long, default_value = "repl")]
+        #[arg(short = 'C', long, default_value = "repl")]
         channel: String,
 
         /// Show detailed session info

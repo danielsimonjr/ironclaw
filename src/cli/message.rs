@@ -10,7 +10,7 @@ pub enum MessageCommand {
         content: String,
 
         /// Target channel (e.g., "telegram", "slack", "webchat")
-        #[arg(short, long, default_value = "default")]
+        #[arg(short = 'C', long, default_value = "default")]
         channel: String,
 
         /// Thread/conversation ID
@@ -18,7 +18,7 @@ pub enum MessageCommand {
         thread: Option<String>,
 
         /// Recipient (for DM channels)
-        #[arg(short, long)]
+        #[arg(short = 'T', long)]
         to: Option<String>,
     },
 }

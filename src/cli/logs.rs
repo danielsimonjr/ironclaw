@@ -11,7 +11,7 @@ pub enum LogsCommand {
         lines: usize,
 
         /// Filter by log level (debug, info, warn, error)
-        #[arg(short = 'l', long)]
+        #[arg(short = 'L', long)]
         level: Option<String>,
 
         /// Filter by module/target

@@ -257,3 +257,102 @@ impl Cli {
         matches!(self.command, None | Some(Command::Run))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parse_no_args() {
+        let cli = Cli::try_parse_from(["ironclaw"]).unwrap();
+        assert!(cli.command.is_none());
+        assert!(!cli.cli_only);
+        assert!(!cli.no_db);
+        assert!(cli.message.is_none());
+    }
+
+    #[test]
+    fn parse_cli_only_flag() {
+        let cli = Cli::try_parse_from(["ironclaw", "--cli-only"]).unwrap();
+        assert!(cli.cli_only);
+    }
+
+    #[test]
+    fn parse_no_db_flag() {
+        let cli = Cli::try_parse_from(["ironclaw", "--no-db"]).unwrap();
+        assert!(cli.no_db);
+    }
+
+    #[test]
+    fn parse_message_flag() {
+        let cli = Cli::try_parse_from(["ironclaw", "-m", "hello"]).unwrap();
+        assert_eq!(cli.message.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn parse_message_long_flag() {
+        let cli = Cli::try_parse_from(["ironclaw", "--message", "world"]).unwrap();
+        assert_eq!(cli.message.as_deref(), Some("world"));
+    }
+
+    #[test]
+    fn should_run_agent_no_command() {
+        let cli = Cli::try_parse_from(["ironclaw"]).unwrap();
+        assert!(cli.should_run_agent());
+    }
+
+    #[test]
+    fn should_run_agent_run_command() {
+        let cli = Cli::try_parse_from(["ironclaw", "run"]).unwrap();
+        assert!(cli.should_run_agent());
+    }
+
+    #[test]
+    fn should_run_agent_false_for_status() {
+        let cli = Cli::try_parse_from(["ironclaw", "status"]).unwrap();
+        assert!(!cli.should_run_agent());
+    }
+
+    #[test]
+    fn should_run_agent_false_for_doctor() {
+        let cli = Cli::try_parse_from(["ironclaw", "doctor"]).unwrap();
+        assert!(!cli.should_run_agent());
+    }
+
+    #[test]
+    fn command_run_variant() {
+        let cli = Cli::try_parse_from(["ironclaw", "run"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Run)));
+    }
+
+    #[test]
+    fn command_status_variant() {
+        let cli = Cli::try_parse_from(["ironclaw", "status"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Status)));
+    }
+
+    #[test]
+    fn command_doctor_variant() {
+        let cli = Cli::try_parse_from(["ironclaw", "doctor"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Doctor)));
+    }
+
+    #[test]
+    fn command_completion_variant() {
+        let cli = Cli::try_parse_from(["ironclaw", "completion", "bash"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Completion { .. })));
+    }
+
+    #[test]
+    fn parse_config_flag() {
+        let cli = Cli::try_parse_from(["ironclaw", "-c", "/tmp/config.toml"]).unwrap();
+        assert!(cli.config.is_some());
+    }
+
+    #[test]
+    fn parse_no_onboard_flag() {
+        let cli = Cli::try_parse_from(["ironclaw", "--no-onboard"]).unwrap();
+        assert!(cli.no_onboard);
+    }
+}

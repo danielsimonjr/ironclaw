@@ -58,3 +58,37 @@ pub fn generate_completions(shell: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_shell_returns_error() {
+        let result = generate_completions("nushell");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Unsupported shell"));
+        assert!(msg.contains("nushell"));
+    }
+
+    #[test]
+    fn known_shells_are_recognized() {
+        for shell in &["bash", "zsh", "fish", "powershell", "ps", "elvish"] {
+            let result = generate_completions(shell);
+            assert!(result.is_ok(), "shell '{}' should be supported", shell);
+        }
+    }
+
+    #[test]
+    fn case_insensitive_shell_names() {
+        for shell in &["BASH", "Zsh", "FISH", "PowerShell", "PS", "ELVISH"] {
+            let result = generate_completions(shell);
+            assert!(
+                result.is_ok(),
+                "shell '{}' should be recognized (case-insensitive)",
+                shell
+            );
+        }
+    }
+}

@@ -1765,3 +1765,507 @@ impl Store {
         Ok(count > 0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use rust_decimal::Decimal;
+    use uuid::Uuid;
+
+    // ==================== LlmCallRecord ====================
+
+    #[test]
+    fn test_llm_call_record_construction() {
+        let job_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+        let record = LlmCallRecord {
+            job_id: Some(job_id),
+            conversation_id: Some(conv_id),
+            provider: "openai",
+            model: "gpt-4",
+            input_tokens: 1500,
+            output_tokens: 300,
+            cost: Decimal::new(42, 4), // 0.0042
+            purpose: Some("routing"),
+        };
+
+        assert_eq!(record.job_id, Some(job_id));
+        assert_eq!(record.conversation_id, Some(conv_id));
+        assert_eq!(record.provider, "openai");
+        assert_eq!(record.model, "gpt-4");
+        assert_eq!(record.input_tokens, 1500);
+        assert_eq!(record.output_tokens, 300);
+        assert_eq!(record.cost, Decimal::new(42, 4));
+        assert_eq!(record.purpose, Some("routing"));
+    }
+
+    #[test]
+    fn test_llm_call_record_optional_fields_none() {
+        let record = LlmCallRecord {
+            job_id: None,
+            conversation_id: None,
+            provider: "anthropic",
+            model: "claude-3",
+            input_tokens: 0,
+            output_tokens: 0,
+            cost: Decimal::ZERO,
+            purpose: None,
+        };
+
+        assert!(record.job_id.is_none());
+        assert!(record.conversation_id.is_none());
+        assert!(record.purpose.is_none());
+    }
+
+    #[test]
+    fn test_llm_call_record_debug() {
+        let record = LlmCallRecord {
+            job_id: None,
+            conversation_id: None,
+            provider: "ollama",
+            model: "llama3",
+            input_tokens: 10,
+            output_tokens: 20,
+            cost: Decimal::ZERO,
+            purpose: None,
+        };
+        let debug = format!("{:?}", record);
+        assert!(debug.contains("LlmCallRecord"));
+        assert!(debug.contains("ollama"));
+        assert!(debug.contains("llama3"));
+    }
+
+    #[test]
+    fn test_llm_call_record_clone() {
+        let record = LlmCallRecord {
+            job_id: None,
+            conversation_id: None,
+            provider: "gemini",
+            model: "gemini-pro",
+            input_tokens: 100,
+            output_tokens: 50,
+            cost: Decimal::new(1, 3),
+            purpose: Some("tool_call"),
+        };
+        let cloned = record.clone();
+        assert_eq!(cloned.provider, "gemini");
+        assert_eq!(cloned.model, "gemini-pro");
+        assert_eq!(cloned.input_tokens, 100);
+        assert_eq!(cloned.cost, record.cost);
+    }
+
+    // ==================== SandboxJobRecord ====================
+
+    #[test]
+    fn test_sandbox_job_record_construction() {
+        let id = Uuid::new_v4();
+        let now = Utc::now();
+        let record = SandboxJobRecord {
+            id,
+            task: "build project".to_string(),
+            status: "running".to_string(),
+            user_id: "user-123".to_string(),
+            project_dir: "/home/user/project".to_string(),
+            success: None,
+            failure_reason: None,
+            created_at: now,
+            started_at: Some(now),
+            completed_at: None,
+        };
+
+        assert_eq!(record.id, id);
+        assert_eq!(record.task, "build project");
+        assert_eq!(record.status, "running");
+        assert_eq!(record.user_id, "user-123");
+        assert_eq!(record.project_dir, "/home/user/project");
+        assert!(record.success.is_none());
+        assert!(record.failure_reason.is_none());
+        assert_eq!(record.created_at, now);
+        assert_eq!(record.started_at, Some(now));
+        assert!(record.completed_at.is_none());
+    }
+
+    #[test]
+    fn test_sandbox_job_record_completed() {
+        let now = Utc::now();
+        let record = SandboxJobRecord {
+            id: Uuid::new_v4(),
+            task: "run tests".to_string(),
+            status: "completed".to_string(),
+            user_id: "user-456".to_string(),
+            project_dir: "/tmp/work".to_string(),
+            success: Some(true),
+            failure_reason: None,
+            created_at: now,
+            started_at: Some(now),
+            completed_at: Some(now),
+        };
+
+        assert_eq!(record.success, Some(true));
+        assert!(record.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_sandbox_job_record_failed() {
+        let now = Utc::now();
+        let record = SandboxJobRecord {
+            id: Uuid::new_v4(),
+            task: "deploy".to_string(),
+            status: "failed".to_string(),
+            user_id: "user-789".to_string(),
+            project_dir: "/srv/app".to_string(),
+            success: Some(false),
+            failure_reason: Some("container OOM killed".to_string()),
+            created_at: now,
+            started_at: Some(now),
+            completed_at: Some(now),
+        };
+
+        assert_eq!(record.success, Some(false));
+        assert_eq!(
+            record.failure_reason.as_deref(),
+            Some("container OOM killed")
+        );
+    }
+
+    #[test]
+    fn test_sandbox_job_record_debug() {
+        let record = SandboxJobRecord {
+            id: Uuid::nil(),
+            task: "test".to_string(),
+            status: "creating".to_string(),
+            user_id: "u".to_string(),
+            project_dir: "/tmp".to_string(),
+            success: None,
+            failure_reason: None,
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+        };
+        let debug = format!("{:?}", record);
+        assert!(debug.contains("SandboxJobRecord"));
+        assert!(debug.contains("creating"));
+    }
+
+    #[test]
+    fn test_sandbox_job_record_clone() {
+        let record = SandboxJobRecord {
+            id: Uuid::new_v4(),
+            task: "lint".to_string(),
+            status: "running".to_string(),
+            user_id: "dev".to_string(),
+            project_dir: "/code".to_string(),
+            success: None,
+            failure_reason: None,
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+        };
+        let cloned = record.clone();
+        assert_eq!(cloned.id, record.id);
+        assert_eq!(cloned.task, record.task);
+    }
+
+    // ==================== SandboxJobSummary ====================
+
+    #[test]
+    fn test_sandbox_job_summary_default() {
+        let summary = SandboxJobSummary::default();
+        assert_eq!(summary.total, 0);
+        assert_eq!(summary.creating, 0);
+        assert_eq!(summary.running, 0);
+        assert_eq!(summary.completed, 0);
+        assert_eq!(summary.failed, 0);
+        assert_eq!(summary.interrupted, 0);
+    }
+
+    #[test]
+    fn test_sandbox_job_summary_construction() {
+        let summary = SandboxJobSummary {
+            total: 10,
+            creating: 1,
+            running: 3,
+            completed: 4,
+            failed: 1,
+            interrupted: 1,
+        };
+        assert_eq!(summary.total, 10);
+        assert_eq!(summary.creating, 1);
+        assert_eq!(summary.running, 3);
+        assert_eq!(summary.completed, 4);
+        assert_eq!(summary.failed, 1);
+        assert_eq!(summary.interrupted, 1);
+    }
+
+    #[test]
+    fn test_sandbox_job_summary_debug() {
+        let summary = SandboxJobSummary {
+            total: 5,
+            ..Default::default()
+        };
+        let debug = format!("{:?}", summary);
+        assert!(debug.contains("SandboxJobSummary"));
+        assert!(debug.contains("5"));
+    }
+
+    #[test]
+    fn test_sandbox_job_summary_clone() {
+        let summary = SandboxJobSummary {
+            total: 7,
+            running: 2,
+            completed: 5,
+            ..Default::default()
+        };
+        let cloned = summary.clone();
+        assert_eq!(cloned.total, 7);
+        assert_eq!(cloned.running, 2);
+        assert_eq!(cloned.completed, 5);
+    }
+
+    // ==================== JobEventRecord ====================
+
+    #[test]
+    fn test_job_event_record_construction() {
+        let job_id = Uuid::new_v4();
+        let now = Utc::now();
+        let data = serde_json::json!({"message": "task started", "progress": 0});
+        let record = JobEventRecord {
+            id: 42,
+            job_id,
+            event_type: "progress".to_string(),
+            data: data.clone(),
+            created_at: now,
+        };
+
+        assert_eq!(record.id, 42);
+        assert_eq!(record.job_id, job_id);
+        assert_eq!(record.event_type, "progress");
+        assert_eq!(record.data, data);
+        assert_eq!(record.created_at, now);
+    }
+
+    #[test]
+    fn test_job_event_record_with_nested_json_data() {
+        let data = serde_json::json!({
+            "tool": "shell",
+            "args": {"command": "cargo test"},
+            "result": {"exit_code": 0, "stdout": "ok"}
+        });
+        let record = JobEventRecord {
+            id: 1,
+            job_id: Uuid::new_v4(),
+            event_type: "tool_result".to_string(),
+            data,
+            created_at: Utc::now(),
+        };
+
+        assert_eq!(record.data["tool"], "shell");
+        assert_eq!(record.data["result"]["exit_code"], 0);
+    }
+
+    #[test]
+    fn test_job_event_record_debug() {
+        let record = JobEventRecord {
+            id: 99,
+            job_id: Uuid::nil(),
+            event_type: "completed".to_string(),
+            data: serde_json::Value::Null,
+            created_at: Utc::now(),
+        };
+        let debug = format!("{:?}", record);
+        assert!(debug.contains("JobEventRecord"));
+        assert!(debug.contains("completed"));
+    }
+
+    #[test]
+    fn test_job_event_record_clone() {
+        let data = serde_json::json!({"key": "value"});
+        let record = JobEventRecord {
+            id: 7,
+            job_id: Uuid::new_v4(),
+            event_type: "log".to_string(),
+            data,
+            created_at: Utc::now(),
+        };
+        let cloned = record.clone();
+        assert_eq!(cloned.id, record.id);
+        assert_eq!(cloned.job_id, record.job_id);
+        assert_eq!(cloned.data, record.data);
+    }
+
+    // ==================== ConversationSummary ====================
+
+    #[test]
+    fn test_conversation_summary_construction() {
+        let id = Uuid::new_v4();
+        let now = Utc::now();
+        let summary = ConversationSummary {
+            id,
+            title: Some("Hello, help me with Rust".to_string()),
+            message_count: 12,
+            started_at: now,
+            last_activity: now,
+            thread_type: Some("assistant".to_string()),
+        };
+
+        assert_eq!(summary.id, id);
+        assert_eq!(summary.title.as_deref(), Some("Hello, help me with Rust"));
+        assert_eq!(summary.message_count, 12);
+        assert_eq!(summary.thread_type.as_deref(), Some("assistant"));
+    }
+
+    #[test]
+    fn test_conversation_summary_no_title() {
+        let summary = ConversationSummary {
+            id: Uuid::new_v4(),
+            title: None,
+            message_count: 0,
+            started_at: Utc::now(),
+            last_activity: Utc::now(),
+            thread_type: None,
+        };
+        assert!(summary.title.is_none());
+        assert!(summary.thread_type.is_none());
+        assert_eq!(summary.message_count, 0);
+    }
+
+    #[test]
+    fn test_conversation_summary_debug() {
+        let summary = ConversationSummary {
+            id: Uuid::nil(),
+            title: Some("test".to_string()),
+            message_count: 1,
+            started_at: Utc::now(),
+            last_activity: Utc::now(),
+            thread_type: None,
+        };
+        let debug = format!("{:?}", summary);
+        assert!(debug.contains("ConversationSummary"));
+    }
+
+    #[test]
+    fn test_conversation_summary_clone() {
+        let summary = ConversationSummary {
+            id: Uuid::new_v4(),
+            title: Some("cloneable".to_string()),
+            message_count: 5,
+            started_at: Utc::now(),
+            last_activity: Utc::now(),
+            thread_type: Some("thread".to_string()),
+        };
+        let cloned = summary.clone();
+        assert_eq!(cloned.id, summary.id);
+        assert_eq!(cloned.title, summary.title);
+        assert_eq!(cloned.message_count, summary.message_count);
+    }
+
+    // ==================== ConversationMessage ====================
+
+    #[test]
+    fn test_conversation_message_construction() {
+        let id = Uuid::new_v4();
+        let now = Utc::now();
+        let msg = ConversationMessage {
+            id,
+            role: "user".to_string(),
+            content: "What is the weather?".to_string(),
+            created_at: now,
+        };
+
+        assert_eq!(msg.id, id);
+        assert_eq!(msg.role, "user");
+        assert_eq!(msg.content, "What is the weather?");
+        assert_eq!(msg.created_at, now);
+    }
+
+    #[test]
+    fn test_conversation_message_assistant_role() {
+        let msg = ConversationMessage {
+            id: Uuid::new_v4(),
+            role: "assistant".to_string(),
+            content: "The weather is sunny.".to_string(),
+            created_at: Utc::now(),
+        };
+        assert_eq!(msg.role, "assistant");
+    }
+
+    #[test]
+    fn test_conversation_message_debug() {
+        let msg = ConversationMessage {
+            id: Uuid::nil(),
+            role: "system".to_string(),
+            content: "You are helpful.".to_string(),
+            created_at: Utc::now(),
+        };
+        let debug = format!("{:?}", msg);
+        assert!(debug.contains("ConversationMessage"));
+        assert!(debug.contains("system"));
+    }
+
+    #[test]
+    fn test_conversation_message_clone() {
+        let msg = ConversationMessage {
+            id: Uuid::new_v4(),
+            role: "user".to_string(),
+            content: "clone me".to_string(),
+            created_at: Utc::now(),
+        };
+        let cloned = msg.clone();
+        assert_eq!(cloned.id, msg.id);
+        assert_eq!(cloned.content, msg.content);
+    }
+
+    // ==================== SettingRow ====================
+
+    #[test]
+    fn test_setting_row_construction() {
+        let now = Utc::now();
+        let row = SettingRow {
+            key: "theme".to_string(),
+            value: serde_json::json!("dark"),
+            updated_at: now,
+        };
+
+        assert_eq!(row.key, "theme");
+        assert_eq!(row.value, serde_json::json!("dark"));
+        assert_eq!(row.updated_at, now);
+    }
+
+    #[test]
+    fn test_setting_row_complex_value() {
+        let row = SettingRow {
+            key: "notifications".to_string(),
+            value: serde_json::json!({"email": true, "push": false, "frequency": "daily"}),
+            updated_at: Utc::now(),
+        };
+
+        assert_eq!(row.value["email"], true);
+        assert_eq!(row.value["push"], false);
+        assert_eq!(row.value["frequency"], "daily");
+    }
+
+    #[test]
+    fn test_setting_row_debug() {
+        let row = SettingRow {
+            key: "lang".to_string(),
+            value: serde_json::json!("en"),
+            updated_at: Utc::now(),
+        };
+        let debug = format!("{:?}", row);
+        assert!(debug.contains("SettingRow"));
+        assert!(debug.contains("lang"));
+    }
+
+    #[test]
+    fn test_setting_row_clone() {
+        let row = SettingRow {
+            key: "model".to_string(),
+            value: serde_json::json!("gpt-4"),
+            updated_at: Utc::now(),
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.key, row.key);
+        assert_eq!(cloned.value, row.value);
+    }
+}
