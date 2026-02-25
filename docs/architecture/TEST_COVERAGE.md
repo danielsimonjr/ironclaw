@@ -6,8 +6,8 @@
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 2,103 |
-| Source Files with Tests | 203 |
+| Total Tests | 2,147 |
+| Source Files with Tests | 208 |
 | Test Modules | 23 |
 | Pre-existing Failures | 11 (Windows-specific) |
 
@@ -37,7 +37,7 @@ All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convent
          / Integration\ (Agent, Worker, Orchestrator: 276 tests)
         /______________\
        /                \
-      /    Unit Tests    \ (Channels, Tools, Safety, LLM, etc.: 1,807 tests)
+      /    Unit Tests    \ (Channels, Tools, Safety, LLM, etc.: 1,851 tests)
      /____________________\
 ```
 
@@ -47,18 +47,18 @@ All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convent
 
 | Module | Tests | Files | Description |
 |--------|------:|------:|-------------|
-| channels | 472 | 34 | REPL, HTTP, WASM, web gateway, SSE, PID lock |
+| channels | 477 | 35 | REPL, HTTP, WASM, web gateway, SSE, PID lock, webhooks |
 | tools | 348 | 40 | Built-in tools, WASM tools, MCP, tool registry |
 | agent | 240 | 20 | Agent loop, routing, scheduling, session mgmt, self-repair, heartbeat |
 | media | 150 | 11 | Image, PDF, audio, video, TTS processing |
 | safety | 129 | 11 | Sanitizer, validator, policy, leak detection, ACLs, OAuth |
 | llm | 101 | 13 | Provider trait, failover, cost tracking, 7 backends |
 | (root) | 108 | 7 | Top-level modules (config, error, lib, util) |
-| cli | 70 | 8 | CLI commands and output formatting |
+| cli | 89 | 10 | CLI commands, completion, output formatting |
 | hooks | 63 | 6 | Lifecycle hooks, bundled hooks, webhooks |
 | skills | 61 | 2 | Skill definition and execution |
 | workspace | 60 | 8 | Memory, hybrid search, embeddings |
-| extensions | 59 | 6 | Discovery, install, ClawHub |
+| extensions | 89 | 7 | Discovery, install, ClawHub, types |
 | sandbox | 48 | 9 | Docker sandbox, network proxy, error types |
 | context | 35 | 3 | Token/time/cost tracking |
 | estimation | 32 | 5 | Job estimation |
@@ -68,9 +68,9 @@ All tests are inline unit tests using Rust's `#[cfg(test)] mod tests {}` convent
 | db | 20 | 1 | Database trait and migrations |
 | orchestrator | 13 | 3 | Job orchestration |
 | setup | 10 | 3 | First-run setup |
-| history | 8 | 1 | Analytics structs |
+| history | 30 | 2 | Analytics structs, store data types |
 | evaluation | 5 | 2 | Success evaluation |
-| **Total** | **2,103** | **203** | |
+| **Total** | **2,147** | **208** | |
 
 ---
 
@@ -86,6 +86,7 @@ The largest test module. Covers all input channel implementations and the web ga
 | `src/channels/repl.rs` | Yes |
 | `src/channels/http.rs` | Yes |
 | `src/channels/wasm_channel.rs` | Yes |
+| `src/channels/webhook_server.rs` | Yes |
 | `src/channels/web/*.rs` | Yes (multiple files) |
 
 ### tools (348 tests, 40 files)
@@ -168,24 +169,25 @@ Covers the `Database` trait. Both backend implementations lack direct tests.
 |-------------|-----------|
 | `src/hooks/*.rs` | Yes (6 files) |
 
-### cli (70 tests, 8 files)
+### cli (89 tests, 10 files)
 
 | Source File | Has Tests |
 |-------------|-----------|
-| `src/cli/*.rs` | Yes (8 files) |
+| `src/cli/mod.rs` | Yes |
+| `src/cli/completion.rs` | Yes |
+| `src/cli/*.rs` | Yes (8 other files) |
 | `src/cli/hooks.rs` | **No** (234 lines) |
 | `src/cli/cron.rs` | **No** (231 lines) |
 | `src/cli/gateway.rs` | **No** (212 lines) |
 | `src/cli/status.rs` | **No** (200 lines) |
 | `src/cli/logs.rs` | **No** (193 lines) |
-| `src/cli/sessions.rs` | **No** (151 lines) |
 
 ### Other Modules
 
 | Module | Tests | Files | Notes |
 |--------|------:|------:|-------|
 | skills | 61 | 2 | Skill definition and execution |
-| extensions | 59 | 6 | Discovery, install, ClawHub |
+| extensions | 89 | 7 | Discovery, install, ClawHub, types |
 | sandbox | 48 | 9 | Docker sandbox, network proxy, error types |
 | context | 35 | 3 | Token/time/cost tracking |
 | estimation | 32 | 5 | Job estimation |
@@ -194,7 +196,7 @@ Covers the `Database` trait. Both backend implementations lack direct tests.
 | secrets | 21 | 4 | Secret storage |
 | orchestrator | 13 | 3 | Job orchestration |
 | setup | 10 | 3 | First-run setup |
-| history | 8 | 1 | Analytics structs |
+| history | 30 | 2 | Analytics structs, store data types |
 | evaluation | 5 | 2 | Success evaluation |
 
 ---
@@ -207,7 +209,6 @@ Files without tests, sorted by priority (size and importance):
 
 | File | Lines | Why It Matters |
 |------|------:|----------------|
-| `src/history/store.rs` | 1,767 | Primary history persistence layer |
 | `src/main.rs` | 1,421 | Application entry point and startup sequence |
 | `src/workspace/repository.rs` | 910 | Workspace persistence layer |
 | `src/db/postgres.rs` | 724 | PostgreSQL backend implementation |
@@ -247,6 +248,10 @@ These tests fail on Windows due to platform-specific behavior and pass on Linux/
 | `cli::pairing::tests` | 2 | Depends on pairing store (same file locking issue) |
 
 These failures do not indicate code defects. They reflect platform differences in file locking semantics.
+
+### Resolved Issues
+
+- **Clap short flag conflicts** (fixed 2026-02-24): Three duplicate `-c`, `-l`, `-t` short flags across CLI subcommands caused `clap_complete::generate()` to panic with debug assertions. Fixed by assigning explicit short flags: `message --channel` → `-C`, `sessions --channel` → `-C`, `logs --level` → `-L`, `message --to` → `-T`.
 
 ---
 
@@ -300,6 +305,6 @@ From `CLAUDE.md`:
 
 ---
 
-**Document Version**: 1.1
-**Last Updated**: 2026-02-23
+**Document Version**: 1.2
+**Last Updated**: 2026-02-24
 **Maintained By**: Daniel Simon Jr.
