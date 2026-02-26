@@ -7,6 +7,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/danielsimonjr/ironclaw/compare/v0.1.3...v0.1.4) - 2026-02-26
+
+### Added
+
+- implement Edge TTS WebSocket, WIT introspection, and add 44 unit tests
+- add 133 user journey integration tests across 21 modules
+- implement security analysis proposals — remediate 17 findings across 8 modules
+- implement test coverage proposals with ~145 new tests and update docs
+- add OpenRouter as LLM provider
+- add Windows installer and PowerShell install script
+- implement RLM-based large document processing for media module
+- implement P3 feature parity — 12 new modules for OpenClaw alignment
+- implement P2 feature parity — 15 modules for OpenClaw alignment
+- add session tools, presence tracking, and log redaction
+- implement OpenClaw feature parity (all groups except messaging channels)
+- add libSQL/Turso embedded database backend ([#47](https://github.com/danielsimonjr/ironclaw/pull/47))
+- Move debug log truncation from agent loop to REPL channel ([#65](https://github.com/danielsimonjr/ironclaw/pull/65))
+- Add multi-provider LLM support via rig-core adapter ([#36](https://github.com/danielsimonjr/ironclaw/pull/36))
+- Sandbox jobs ([#4](https://github.com/danielsimonjr/ironclaw/pull/4))
+- Add Google Suite & Telegram WASM tools ([#9](https://github.com/danielsimonjr/ironclaw/pull/9))
+- Improve CLI ([#5](https://github.com/danielsimonjr/ironclaw/pull/5))
+
+### Fixed
+
+- replace .unwrap() with proper error handling in production code
+- allow --no-db flag to bypass DATABASE_URL requirement on startup
+- resolve build, CI, and code quality issues found during install testing
+- comprehensive security hardening across 42 findings
+- flatten tool messages for NEAR AI cloud-api compatibility ([#41](https://github.com/danielsimonjr/ironclaw/pull/41))
+- security hardening across all layers ([#35](https://github.com/danielsimonjr/ironclaw/pull/35))
+- resolve runtime panic in Linux keychain integration ([#32](https://github.com/danielsimonjr/ironclaw/pull/32))
+
+### Other
+
+- update TEST_COVERAGE.md for 72 new tests and clap flag fixes
+- add 72 unit tests across 5 modules and fix 3 clap short flag conflicts
+- update TEST_COVERAGE.md for 130 new tests
+- add 130 unit tests across 9 previously untested modules
+- add architecture documentation and fix stale counts
+- add 68 unit tests across 6 modules (batch 2)
+- clarify OAuth nonce design decision in WASM router
+- trim CLAUDE.md from 424 to 229 lines for conciseness
+- add HTML5 user guide and update CHANGELOG, README, CLAUDE.md
+- Add comprehensive security analysis of the IronClaw codebase
+- update CLAUDE.md, CHANGELOG.md, and README.md for OpenRouter provider
+- Update all installer and repository URLs to danielsimonjr/ironclaw
+- Update PowerShell installer URL from nearai to danielsimonjr
+- update CLAUDE.md, CHANGELOG.md, and README.md for Windows installer
+- update CLAUDE.md, CHANGELOG.md, and README.md for RLM large document processing
+- update CLAUDE.md, CHANGELOG.md, and README.md to reflect current codebase
+- fix inaccuracies and add missing features to FEATURE_PARITY.md
+- Implement OpenClaw feature parity (excluding messaging channels)
+- Add supermemory-inspired memory features: connections, spaces, and profiles
+- Replace NEAR AI auth wizard with multi-provider LLM setup
+- Update CLAUDE.md with comprehensive codebase documentation
+- Rewrite CLAUDE.md for Claude Code productivity
+- Bump MSRV to 1.92, add GCP deployment files ([#40](https://github.com/danielsimonjr/ironclaw/pull/40))
+- Add OpenAI-compatible HTTP API (/v1/chat/completions, /v1/models)   ([#31](https://github.com/danielsimonjr/ironclaw/pull/31))
+- release v0.1.3 ([#56](https://github.com/danielsimonjr/ironclaw/pull/56))
+- Enabled builds caching during CI/CD
+- Disabled npm publishing as the name is already taken
+- release v0.1.2 ([#55](https://github.com/danielsimonjr/ironclaw/pull/55))
+- Added Installation instructions for the pre-built binaries
+- Disabled Windows ARM64 builds as auto-updater [provided by cargo-dist] does not support this platform yet and it is not a common platform for us to support
+- Skip creating GitHub Release with release-plz [cargo-dist will do it in the release workflow]
+- release v0.1.1 ([#54](https://github.com/danielsimonjr/ironclaw/pull/54))
+- Renamed the secrets in release-plz.yml to match the configuration
+- Make sure that the binaries release CD it kicking in after release-plz
+- release v0.1.0 ([#46](https://github.com/danielsimonjr/ironclaw/pull/46))
+- Skip release-plz on forks
+- Upgraded release-plz CD pipeline
+- Added CI/CD and release pipelines ([#45](https://github.com/danielsimonjr/ironclaw/pull/45))
+- DM pairing + Telegram channel improvements ([#17](https://github.com/danielsimonjr/ironclaw/pull/17))
+- Fixes build, adds missing sse event and correct command ([#11](https://github.com/danielsimonjr/ironclaw/pull/11))
+- Codex/feature parity pr hook ([#6](https://github.com/danielsimonjr/ironclaw/pull/6))
+- Add WebSocket gateway and control plane ([#8](https://github.com/danielsimonjr/ironclaw/pull/8))
+- select bundled Telegram channel and auto-install ([#3](https://github.com/danielsimonjr/ironclaw/pull/3))
+- Adding skills for reusable work
+- Fix MCP tool calls, approval loop, shutdown, and improve web UI
+- Add auth mode, fix MCP token handling, and parallelize startup loading
+- Merge remote-tracking branch 'origin/main' into ui
+- Adding web UI
+- Rename `setup` CLI command to `onboard` for compatibility
+- Add in-chat extension discovery, auth, and activation system
+- Add Telegram typing indicator via WIT on-status callback
+- Add proactivity features: memory CLI, session pruning, self-repair notifications, slash commands, status diagnostics, context warnings
+- Add hosted MCP server support with OAuth 2.1 and token refresh
+- Add interactive setup wizard and persistent settings
+- Rebrand to IronClaw with security-first mission
+- Fix build_software tool stuck in planning mode loop
+- Enable sandbox by default
+- Fix Telegram Markdown formatting and clarify tool/memory distinctions
+- Simplify Telegram channel config with host-injected tunnel/webhook settings
+- Apply Telegram channel learnings to WhatsApp implementation
+- Merge remote-tracking branch 'origin/main'
+- Docker file for sandbox
+- Replace hardcoded intent patterns with job tools
+- Fix router test to match intentional job creation patterns
+- Add Docker execution sandbox for secure shell command isolation
+- Move setup wizard credentials to database storage
+- Add interactive setup wizard for first-run configuration
+- Add Telegram Bot API channel as WASM module
+- Add OpenClaw feature parity tracking matrix
+- Add Chat Completions API support and expand REPL debugging
+- Implementing channels to be handled in wasm
+- Support non interactive mode and model selection
+- Implement tool approval, fix tool definition refresh, and wire embeddings
+- Tool use
+- Wiring more
+- Add heartbeat integration, planning phase, and auto-repair
+- Login flow
+- Extend support for session management
+- Adding builder capability
+- Load tools at launch
+- Fix multiline message rendering in TUI
+- Parse NEAR AI alternative response format with output field
+- Handle NEAR AI plain text responses
+- Disable mouse capture to allow text selection in TUI
+- Add verbose logging to debug empty NEAR AI responses
+- Improve NEAR AI response parsing for varying response formats
+- Show status/thinking messages in chat window, debug empty responses
+- Add timeout and logging to NEAR AI provider
+- Add status updates to show agent thinking/processing state
+- Add CLI subcommands for WASM tool management
+- Fix TUI shutdown: send /shutdown message and handle in agent loop
+- Remove SimpleCliChannel, add Ctrl+D twice quit, redirect logs to TUI
+- Fix TuiChannel integration and enable in main.rs
+- Integrate Codex patterns: task scheduler, TUI, sessions, compaction
+- Adding LICENSE
+- Add README with IronClaw branding
+- Add WASM sandbox secure API extension
+- Wire database Store into agent loop
+- Implementing WASM runtime
+- Add workspace integration tests
+- Compact memory_tree output format
+- Replace memory_list with memory_tree tool
+- Simplify workspace to path-based storage, remove legacy code
+- Add NEAR AI chat-api as default LLM provider
+- Add CLAUDE.md project documentation
+- Add workspace and memory system (OpenClaw-inspired)
+- Initial implementation of the agent framework
+
 ### Added
 
 - **User journey integration tests** — 133 comprehensive tests across 21 modules covering end-to-end user flows without external dependencies (no DB, LLM, or Docker):
