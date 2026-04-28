@@ -1,0 +1,13 @@
+# Git internals — keeps Dropbox out of .git so git operations don't get blocked
+.git/
+
+
+.env
+.env.local
+
+target/
+
+# WASM build artifacts (loaded from disk, not bundled)
+*.wasm
+
+
