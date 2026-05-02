@@ -319,11 +319,34 @@ async fn forward_request(
         uri.to_string(),
     );
 
-    // Copy headers (except hop-by-hop headers)
+    // Determine which header names (if any) the proxy is about to *inject*
+    // as a credential. Under `AllowWithCredentials` we must drop any
+    // attacker-supplied copies of these headers so the container cannot
+    // override or shadow the injected value, and so that reqwest's
+    // duplicate-header behaviour cannot leak the container header alongside
+    // the injected one (Finding 18).
+    let stripped_header_names: Vec<String> = credential_strip_set(&decision);
+
+    // Copy headers (except hop-by-hop headers and credential headers under
+    // AllowWithCredentials). `proxy-authorization` is already classified as
+    // hop-by-hop above; we strip it explicitly here too for clarity.
     for (name, value) in req.headers() {
-        if !is_hop_by_hop_header(name.as_str())
-            && let Ok(v) = value.to_str()
-        {
+        let lower = name.as_str().to_lowercase();
+        if is_hop_by_hop_header(name.as_str()) {
+            continue;
+        }
+        if lower == "proxy-authorization" {
+            // Defensive: never forward the proxy-auth header upstream.
+            continue;
+        }
+        if stripped_header_names.iter().any(|s| s == &lower) {
+            tracing::debug!(
+                "Proxy: stripping container-supplied '{}' header before injecting credential",
+                name
+            );
+            continue;
+        }
+        if let Ok(v) = value.to_str() {
             builder = builder.header(name.as_str(), v);
         }
     }
@@ -412,6 +435,25 @@ async fn forward_request(
     }
 }
 
+/// Compute the lowercased header names that must be stripped from the
+/// container's request before forwarding, given a network policy decision.
+///
+/// Always strips `authorization`. Under `AllowWithCredentials::Header`,
+/// also strips the destination header name (case-insensitive) so the
+/// container cannot shadow the injected credential (Finding 18).
+fn credential_strip_set(decision: &NetworkDecision) -> Vec<String> {
+    match decision {
+        NetworkDecision::AllowWithCredentials { location, .. } => match location {
+            CredentialLocation::AuthorizationBearer => vec!["authorization".to_string()],
+            CredentialLocation::Header(name) => {
+                vec!["authorization".to_string(), name.to_lowercase()]
+            }
+            CredentialLocation::QueryParam(_) => vec!["authorization".to_string()],
+        },
+        _ => Vec::new(),
+    }
+}
+
 /// Check if a header is hop-by-hop (should not be forwarded).
 fn is_hop_by_hop_header(name: &str) -> bool {
     matches!(
@@ -471,5 +513,54 @@ mod tests {
         assert!(is_hop_by_hop_header("transfer-encoding"));
         assert!(!is_hop_by_hop_header("content-type"));
         assert!(!is_hop_by_hop_header("authorization"));
+    }
+
+    #[test]
+    fn test_credential_strip_set_for_allow_only() {
+        // Plain Allow does not strip anything (we still forward Authorization
+        // because no credential is being injected — Finding 18 only triggers
+        // under AllowWithCredentials).
+        assert!(credential_strip_set(&NetworkDecision::Allow).is_empty());
+        let denied = NetworkDecision::Deny {
+            reason: "x".to_string(),
+        };
+        assert!(credential_strip_set(&denied).is_empty());
+    }
+
+    #[test]
+    fn test_credential_strip_set_for_authorization_bearer() {
+        // AllowWithCredentials::AuthorizationBearer drops the container's
+        // Authorization header so reqwest cannot send two of them.
+        let decision = NetworkDecision::AllowWithCredentials {
+            secret_name: "API_KEY".to_string(),
+            location: CredentialLocation::AuthorizationBearer,
+        };
+        let strip = credential_strip_set(&decision);
+        assert_eq!(strip, vec!["authorization".to_string()]);
+    }
+
+    #[test]
+    fn test_credential_strip_set_for_custom_header_case_insensitive() {
+        // AllowWithCredentials::Header strips both Authorization AND the
+        // destination header name (case-insensitive).
+        let decision = NetworkDecision::AllowWithCredentials {
+            secret_name: "API_KEY".to_string(),
+            location: CredentialLocation::Header("X-Api-Key".to_string()),
+        };
+        let strip = credential_strip_set(&decision);
+        assert!(strip.contains(&"authorization".to_string()));
+        assert!(strip.contains(&"x-api-key".to_string()));
+    }
+
+    #[test]
+    fn test_credential_strip_set_for_query_param() {
+        let decision = NetworkDecision::AllowWithCredentials {
+            secret_name: "API_KEY".to_string(),
+            location: CredentialLocation::QueryParam("api_key".to_string()),
+        };
+        let strip = credential_strip_set(&decision);
+        // Even when the credential goes in a query param, drop Authorization
+        // so the container can't smuggle one through.
+        assert_eq!(strip, vec!["authorization".to_string()]);
     }
 }
