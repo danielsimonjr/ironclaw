@@ -202,6 +202,33 @@ pub async fn setup_telegram(secrets: &SecretsContext) -> Result<TelegramSetupRes
     }
 }
 
+/// Build a Telegram Bot API URL from a token and path.
+///
+/// Returns the full URL plus a redacted form safe for logging: the
+/// `bot<token>/` segment becomes `bot[REDACTED]/`. Use this whenever an
+/// error path or trace message might stringify the URL — reqwest's error
+/// chain has historically embedded full URLs (Finding 15).
+fn telegram_url(token: &SecretString, path: &str) -> (String, String) {
+    let url = format!(
+        "https://api.telegram.org/bot{}/{}",
+        token.expose_secret(),
+        path
+    );
+    let redacted = format!("https://api.telegram.org/bot[REDACTED]/{}", path);
+    (url, redacted)
+}
+
+/// Mask any `bot<token>/` segment in `s`, in case a reqwest error embeds
+/// the full URL (Finding 15).
+fn redact_telegram_token(s: &str) -> String {
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        regex::Regex::new(r"bot[A-Za-z0-9:_-]+/").expect("static telegram-redaction regex")
+    });
+    re.replace_all(s, "bot[REDACTED]/").into_owned()
+}
+
 /// Bind the bot to the owner's Telegram account by having them send a message.
 ///
 /// Polls `getUpdates` until a message arrives, then captures the sender's user ID.
@@ -227,16 +254,10 @@ async fn bind_telegram_owner(token: &SecretString) -> Result<Option<i64>, String
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     // Clear any existing webhook so getUpdates works
-    let delete_url = format!(
-        "https://api.telegram.org/bot{}/deleteWebhook",
-        token.expose_secret()
-    );
+    let (delete_url, _delete_redacted) = telegram_url(token, "deleteWebhook");
     let _ = client.post(&delete_url).send().await;
 
-    let updates_url = format!(
-        "https://api.telegram.org/bot{}/getUpdates",
-        token.expose_secret()
-    );
+    let (updates_url, _updates_redacted) = telegram_url(token, "getUpdates");
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
 
@@ -246,7 +267,7 @@ async fn bind_telegram_owner(token: &SecretString) -> Result<Option<i64>, String
             .query(&[("timeout", "30"), ("allowed_updates", "[\"message\"]")])
             .send()
             .await
-            .map_err(|e| format!("getUpdates request failed: {}", e))?;
+            .map_err(|e| format!("getUpdates request failed: {}", redact_telegram_token(&e.to_string())))?;
 
         if !response.status().is_success() {
             return Err(format!("getUpdates returned status {}", response.status()));
@@ -278,10 +299,7 @@ async fn bind_telegram_owner(token: &SecretString) -> Result<Option<i64>, String
                 ));
 
                 // Acknowledge the update so it doesn't pile up
-                let ack_url = format!(
-                    "https://api.telegram.org/bot{}/getUpdates",
-                    token.expose_secret()
-                );
+                let (ack_url, _ack_redacted) = telegram_url(token, "getUpdates");
                 let _ = client
                     .get(&ack_url)
                     .query(&[("offset", &(update.update_id + 1).to_string())])
@@ -420,16 +438,13 @@ pub async fn validate_telegram_token(token: &SecretString) -> Result<Option<Stri
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let url = format!(
-        "https://api.telegram.org/bot{}/getMe",
-        token.expose_secret()
-    );
+    let (url, _url_redacted) = telegram_url(token, "getMe");
 
     let response = client
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| format!("Request failed: {}", redact_telegram_token(&e.to_string())))?;
 
     if !response.status().is_success() {
         return Err(format!("API returned status {}", response.status()));
@@ -438,7 +453,7 @@ pub async fn validate_telegram_token(token: &SecretString) -> Result<Option<Stri
     let body: TelegramGetMeResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| format!("Failed to parse response: {}", redact_telegram_token(&e.to_string())))?;
 
     if body.ok {
         Ok(body.result.and_then(|u| u.username))
@@ -630,5 +645,36 @@ mod tests {
     fn test_generate_webhook_secret() {
         let secret = generate_webhook_secret();
         assert_eq!(secret.len(), 64); // 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn test_telegram_url_returns_redacted_form() {
+        // Finding 15: errors / logs must use the redacted form, never the raw
+        // bot<token> path segment.
+        let token = SecretString::from("123456:ABCDEF-secret_token-xyz".to_string());
+        let (url, redacted) = telegram_url(&token, "getMe");
+        assert!(url.contains("123456:ABCDEF-secret_token-xyz"));
+        assert!(!redacted.contains("123456"));
+        assert!(!redacted.contains("ABCDEF"));
+        assert!(redacted.contains("bot[REDACTED]"));
+        assert!(redacted.ends_with("/getMe"));
+    }
+
+    #[test]
+    fn test_redact_telegram_token_masks_token_segment() {
+        // Finding 15: a stringified reqwest error embedding the URL must be
+        // safe to surface in the error chain.
+        let leaked =
+            "Request failed: connect to https://api.telegram.org/bot12345:ABCDEFsecret/getMe";
+        let cleaned = redact_telegram_token(leaked);
+        assert!(!cleaned.contains("12345"));
+        assert!(!cleaned.contains("ABCDEFsecret"));
+        assert!(cleaned.contains("bot[REDACTED]"));
+    }
+
+    #[test]
+    fn test_redact_telegram_token_passes_through_clean_text() {
+        let s = "no token here, just text";
+        assert_eq!(redact_telegram_token(s), s);
     }
 }
