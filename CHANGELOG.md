@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **MCP OAuth: validate `state` parameter to close CSRF gap (Finding 12)** — `build_authorization_url` now returns the generated `state` so callers can verify it on callback; `wait_for_authorization_callback` requires an `expected_state` argument and uses constant-time comparison via `subtle::ConstantTimeEq`. A new `AuthError::StateMismatch` is returned when the state is missing or does not match. `ExtensionManager` stores the expected state in `PendingAuth` for callback validation. Adds 6 unit tests (state matching, callback query parsing) and 3 tokio tests (mismatched / matched / missing state).
+- **MCP OAuth: wrap tokens in `SecretString` to prevent log leakage (Finding 13)** — `AccessToken::access_token` and `AccessToken::refresh_token` are now `SecretString` / `Option<SecretString>` so accidental `Debug` / `tracing` output cannot leak the bare bytes. `TokenResponse` gets a hand-written `Debug` impl that redacts both token fields. Error paths in `exchange_code_for_token` and `refresh_access_token` no longer embed the response body in returned errors (the body may contain a token even on non-2xx responses). Adds 2 redaction tests for `AccessToken` and `TokenResponse` `Debug` output.
 
 ### Added
 

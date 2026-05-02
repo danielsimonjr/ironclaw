@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::RngCore;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -148,12 +149,13 @@ pub struct ClientRegistrationResponse {
 
 /// Access token with optional refresh token and expiry.
 ///
-/// Custom `Debug` impl redacts sensitive fields to prevent token leakage
-/// through log statements (Finding 13).
+/// Token values are wrapped in `SecretString` so accidental `Debug` /
+/// serialization / logging cannot leak them. The custom `Debug` impl below
+/// further redacts the redacted-token marker for clarity (Findings 12, 13).
 #[derive(Clone)]
 pub struct AccessToken {
-    /// The access token value.
-    pub access_token: String,
+    /// The access token value (protected).
+    pub access_token: SecretString,
 
     /// Token type (usually "Bearer").
     pub token_type: String,
@@ -161,11 +163,24 @@ pub struct AccessToken {
     /// Seconds until expiration (if provided).
     pub expires_in: Option<u64>,
 
-    /// Refresh token for obtaining new access tokens.
-    pub refresh_token: Option<String>,
+    /// Refresh token for obtaining new access tokens (protected).
+    pub refresh_token: Option<SecretString>,
 
     /// Scopes granted.
     pub scope: Option<String>,
+}
+
+impl AccessToken {
+    /// Expose the access token bytes. Callers must ensure the result is
+    /// not logged or re-serialized — it is the bare token.
+    pub fn expose_access_token(&self) -> &str {
+        self.access_token.expose_secret()
+    }
+
+    /// Expose the refresh token bytes if present.
+    pub fn expose_refresh_token(&self) -> Option<&str> {
+        self.refresh_token.as_ref().map(|s| s.expose_secret())
+    }
 }
 
 impl std::fmt::Debug for AccessToken {
@@ -184,13 +199,32 @@ impl std::fmt::Debug for AccessToken {
 }
 
 /// Token response from the authorization server.
-#[derive(Debug, Deserialize)]
+///
+/// Manual `Debug` impl redacts `access_token` and `refresh_token` so the
+/// raw response cannot leak via `tracing` / `format!("{:?}", ...)` /
+/// `Result::unwrap()` panics (Finding 13).
+#[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
     token_type: String,
     expires_in: Option<u64>,
     refresh_token: Option<String>,
     scope: Option<String>,
+}
+
+impl std::fmt::Debug for TokenResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokenResponse")
+            .field("access_token", &"[REDACTED]")
+            .field("token_type", &self.token_type)
+            .field("expires_in", &self.expires_in)
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("scope", &self.scope)
+            .finish()
+    }
 }
 
 /// PKCE verifier and challenge pair.
@@ -709,11 +743,10 @@ pub async fn exchange_code_for_token(
 
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(AuthError::TokenExchangeFailed(format!(
-            "HTTP {} - {}",
-            status, body
-        )));
+        // Don't capture the response body — it may contain the raw token
+        // (Finding 13).
+        let _ = response.text().await;
+        return Err(AuthError::TokenExchangeFailed(format!("HTTP {}", status)));
     }
 
     let token_response: TokenResponse = response
@@ -722,10 +755,10 @@ pub async fn exchange_code_for_token(
         .map_err(|e| AuthError::TokenExchangeFailed(format!("Invalid response: {}", e)))?;
 
     Ok(AccessToken {
-        access_token: token_response.access_token,
+        access_token: SecretString::from(token_response.access_token),
         token_type: token_response.token_type,
         expires_in: token_response.expires_in,
-        refresh_token: token_response.refresh_token,
+        refresh_token: token_response.refresh_token.map(SecretString::from),
         scope: token_response.scope,
     })
 }
@@ -738,8 +771,11 @@ pub async fn store_tokens(
     token: &AccessToken,
 ) -> Result<(), AuthError> {
     // Store access token
-    let params = CreateSecretParams::new(server_config.token_secret_name(), &token.access_token)
-        .with_provider(format!("mcp:{}", server_config.name));
+    let params = CreateSecretParams::new(
+        server_config.token_secret_name(),
+        token.access_token.expose_secret(),
+    )
+    .with_provider(format!("mcp:{}", server_config.name));
 
     secrets
         .create(user_id, params)
@@ -748,9 +784,11 @@ pub async fn store_tokens(
 
     // Store refresh token if present
     if let Some(ref refresh_token) = token.refresh_token {
-        let params =
-            CreateSecretParams::new(server_config.refresh_token_secret_name(), refresh_token)
-                .with_provider(format!("mcp:{}", server_config.name));
+        let params = CreateSecretParams::new(
+            server_config.refresh_token_secret_name(),
+            refresh_token.expose_secret(),
+        )
+        .with_provider(format!("mcp:{}", server_config.name));
 
         secrets
             .create(user_id, params)
@@ -888,11 +926,12 @@ pub async fn refresh_access_token(
 
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(AuthError::RefreshFailed(format!(
-            "HTTP {} - {}",
-            status, body
-        )));
+        // Don't capture the response body — successful-token bodies are
+        // sometimes returned even with a non-2xx wrapper, and the body may
+        // contain the raw access/refresh token. Surface only the status
+        // (Finding 13).
+        let _ = response.text().await; // drain to free the connection
+        return Err(AuthError::RefreshFailed(format!("HTTP {}", status)));
     }
 
     let token_response: TokenResponse = response
@@ -901,10 +940,10 @@ pub async fn refresh_access_token(
         .map_err(|e| AuthError::RefreshFailed(format!("Invalid response: {}", e)))?;
 
     let token = AccessToken {
-        access_token: token_response.access_token,
+        access_token: SecretString::from(token_response.access_token),
         token_type: token_response.token_type,
         expires_in: token_response.expires_in,
-        refresh_token: token_response.refresh_token,
+        refresh_token: token_response.refresh_token.map(SecretString::from),
         scope: token_response.scope,
     };
 
@@ -917,6 +956,38 @@ pub async fn refresh_access_token(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_token_response_debug_redacts_secrets() {
+        // Finding 13: TokenResponse must never leak the raw token via
+        // {:?} formatting (used by tracing, .unwrap() panics, etc.).
+        let tr = TokenResponse {
+            access_token: "super-secret-access-token-xyz".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in: Some(3600),
+            refresh_token: Some("super-secret-refresh-token-abc".to_string()),
+            scope: Some("read".to_string()),
+        };
+        let dbg = format!("{:?}", tr);
+        assert!(!dbg.contains("super-secret-access-token-xyz"));
+        assert!(!dbg.contains("super-secret-refresh-token-abc"));
+        assert!(dbg.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_access_token_debug_redacts_secrets() {
+        let at = AccessToken {
+            access_token: SecretString::from("plain-access-XYZ".to_string()),
+            token_type: "Bearer".to_string(),
+            expires_in: Some(60),
+            refresh_token: Some(SecretString::from("plain-refresh-ABC".to_string())),
+            scope: None,
+        };
+        let dbg = format!("{:?}", at);
+        assert!(!dbg.contains("plain-access-XYZ"));
+        assert!(!dbg.contains("plain-refresh-ABC"));
+        assert!(dbg.contains("[REDACTED]"));
+    }
 
     #[test]
     fn test_pkce_challenge_generation() {
