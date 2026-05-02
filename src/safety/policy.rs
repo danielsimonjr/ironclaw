@@ -54,20 +54,25 @@ pub struct PolicyRule {
 
 impl PolicyRule {
     /// Create a new policy rule.
+    ///
+    /// Returns `Err(regex::Error)` if the pattern fails to compile so that
+    /// user-supplied patterns from config cannot panic the safety layer
+    /// (Finding 14). For built-in (compile-time-known) regexes, use
+    /// `.expect("…")` at the call site.
     pub fn new(
         id: impl Into<String>,
         description: impl Into<String>,
         pattern: &str,
         severity: Severity,
         action: PolicyAction,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, regex::Error> {
+        Ok(Self {
             id: id.into(),
             description: description.into(),
             severity,
-            pattern: Regex::new(pattern).expect("Invalid policy regex"),
+            pattern: Regex::new(pattern)?,
             action,
-        }
+        })
     }
 
     /// Check if content matches this rule.
@@ -139,7 +144,7 @@ impl Default for Policy {
             r"(?i)(/etc/passwd|/etc/shadow|/proc/self/environ|/proc/self/cmdline|\.ssh/|\.aws/credentials|\.aws/config|\.docker/config\.json|\.kube/config|\.gnupg/|\.netrc|\.env\b)",
             Severity::Critical,
             PolicyAction::Block,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // S-10: Detect path traversal variants including URL-encoded,
         // double-encoded, and backslash variants.
@@ -149,7 +154,7 @@ impl Default for Policy {
             r"(?i)(\.\.[\\/]|%2e%2e[/\\%]|%252e%252e|\.%2e[/\\]|%2e\.[/\\]|\.\.%2f|\.\.%5c)",
             Severity::Critical,
             PolicyAction::Block,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // Block cryptocurrency private key patterns
         policy.add_rule(PolicyRule::new(
@@ -158,7 +163,7 @@ impl Default for Policy {
             r"(?i)(private.?key|seed.?phrase|mnemonic).{0,20}[0-9a-f]{64}",
             Severity::Critical,
             PolicyAction::Block,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // Warn on SQL-like patterns
         policy.add_rule(PolicyRule::new(
@@ -167,7 +172,7 @@ impl Default for Policy {
             r"(?i)(DROP\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET)",
             Severity::Medium,
             PolicyAction::Warn,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // Block shell command injection patterns (expanded: &&, ||, $(), backticks)
         policy.add_rule(PolicyRule::new(
@@ -176,7 +181,7 @@ impl Default for Policy {
             r"(?i)(;\s*rm\s+-rf|&&\s*rm\s+-rf|\|\|\s*rm\s+-rf|;\s*curl\s+.*\|\s*sh|&&\s*curl\s+.*\|\s*sh|\$\(.*\)|`[^`]+`)",
             Severity::Critical,
             PolicyAction::Block,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // Warn on excessive URLs
         policy.add_rule(PolicyRule::new(
@@ -185,7 +190,7 @@ impl Default for Policy {
             r"(https?://[^\s]+\s*){10,}",
             Severity::Low,
             PolicyAction::Warn,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // Block encoded payloads that look like exploits
         policy.add_rule(PolicyRule::new(
@@ -194,7 +199,7 @@ impl Default for Policy {
             r"(?i)(base64_decode|eval\s*\(\s*base64|atob\s*\()",
             Severity::High,
             PolicyAction::Sanitize,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         // Warn on very long strings without spaces (potential obfuscation)
         policy.add_rule(PolicyRule::new(
@@ -203,7 +208,7 @@ impl Default for Policy {
             r"[^\s]{500,}",
             Severity::Medium,
             PolicyAction::Warn,
-        ));
+        ).expect("built-in policy regex must compile"));
 
         policy
     }
@@ -248,6 +253,32 @@ mod tests {
         assert!(Severity::Critical > Severity::High);
         assert!(Severity::High > Severity::Medium);
         assert!(Severity::Medium > Severity::Low);
+    }
+
+    #[test]
+    fn test_policy_rule_new_returns_err_on_bad_regex() {
+        // Finding 14: malformed user-supplied regex must NOT panic.
+        let result = PolicyRule::new(
+            "bad_rule",
+            "malformed",
+            "[",
+            Severity::Low,
+            PolicyAction::Warn,
+        );
+        assert!(result.is_err());
+        assert!(matches!(result, Err(regex::Error::Syntax(_))));
+    }
+
+    #[test]
+    fn test_policy_rule_new_succeeds_on_valid_regex() {
+        let result = PolicyRule::new(
+            "good_rule",
+            "fine",
+            r"^hello$",
+            Severity::Low,
+            PolicyAction::Warn,
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
