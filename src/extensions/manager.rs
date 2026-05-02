@@ -32,6 +32,8 @@ struct PendingAuth {
     _name: String,
     _kind: ExtensionKind,
     created_at: std::time::Instant,
+    /// Expected `state` value for OAuth callback CSRF protection (Finding 12).
+    _expected_state: String,
 }
 
 /// Central manager for extension lifecycle operations.
@@ -689,7 +691,7 @@ impl ExtensionManager {
         };
 
         let pkce = PkceChallenge::generate();
-        let auth_url = build_authorization_url(
+        let (auth_url, expected_state) = build_authorization_url(
             &metadata.authorization_endpoint,
             &client_id,
             &redirect_uri,
@@ -698,13 +700,15 @@ impl ExtensionManager {
             &std::collections::HashMap::new(),
         );
 
-        // Store pending auth for later callback handling
+        // Store pending auth (with expected state for CSRF validation on
+        // callback — Finding 12) for later callback handling.
         self.pending_auth.write().await.insert(
             name.to_string(),
             PendingAuth {
                 _name: name.to_string(),
                 _kind: ExtensionKind::McpServer,
                 created_at: std::time::Instant::now(),
+                _expected_state: expected_state,
             },
         );
 

@@ -29,6 +29,9 @@ pub enum AuthError {
     #[error("Authorization denied by user")]
     AuthorizationDenied,
 
+    #[error("State parameter mismatch (possible CSRF)")]
+    StateMismatch,
+
     #[error("Token exchange failed: {0}")]
     TokenExchangeFailed(String),
 
@@ -443,8 +446,8 @@ pub async fn authorize_mcp_server(
         None
     };
 
-    // Build authorization URL
-    let auth_url = build_authorization_url(
+    // Build authorization URL (returns expected `state` for CSRF validation)
+    let (auth_url, expected_state) = build_authorization_url(
         &authorization_url,
         &client_id,
         &redirect_uri,
@@ -463,8 +466,9 @@ pub async fn authorize_mcp_server(
 
     println!("  Waiting for authorization...");
 
-    // Wait for callback
-    let code = wait_for_authorization_callback(listener, &server_config.name).await?;
+    // Wait for callback (validates state matches expected_state — Finding 12)
+    let code =
+        wait_for_authorization_callback(listener, &server_config.name, &expected_state).await?;
 
     println!("  Exchanging code for token...");
 
@@ -506,7 +510,7 @@ pub fn build_authorization_url(
     scopes: &[String],
     pkce: Option<&PkceChallenge>,
     extra_params: &HashMap<String, String>,
-) -> String {
+) -> (String, String) {
     let mut url = format!(
         "{}?client_id={}&response_type=code&redirect_uri={}",
         base_url,
@@ -528,14 +532,18 @@ pub fn build_authorization_url(
         ));
     }
 
-    // Add CSRF-protection `state` if not already provided
-    if !extra_params.contains_key("state") {
+    // Add CSRF-protection `state` if not already provided. The state is
+    // returned to the caller so it can be validated on callback (Finding 12).
+    let state = if let Some(existing) = extra_params.get("state") {
+        existing.clone()
+    } else {
         use rand::RngCore;
         let mut state_bytes = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut state_bytes);
-        let state: String = state_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-        url.push_str(&format!("&state={}", urlencoding::encode(&state)));
-    }
+        let s: String = state_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+        url.push_str(&format!("&state={}", urlencoding::encode(&s)));
+        s
+    };
 
     for (key, value) in extra_params {
         url.push_str(&format!(
@@ -545,13 +553,56 @@ pub fn build_authorization_url(
         ));
     }
 
-    url
+    (url, state)
+}
+
+/// Parse a `code` and `state` pair from a URL-encoded query string.
+///
+/// Returns `(code, state)`. `state` is `None` if absent. Helper extracted so
+/// the parser can be unit-tested without a TCP listener (Finding 12).
+fn parse_callback_query(query: &str) -> (Option<String>, Option<String>) {
+    let mut code: Option<String> = None;
+    let mut state: Option<String> = None;
+    for param in query.split('&') {
+        let parts: Vec<&str> = param.splitn(2, '=').collect();
+        if parts.len() != 2 {
+            continue;
+        }
+        let value = urlencoding::decode(parts[1])
+            .unwrap_or_else(|_| parts[1].into())
+            .into_owned();
+        match parts[0] {
+            "code" => code = Some(value),
+            "state" => state = Some(value),
+            _ => {}
+        }
+    }
+    (code, state)
+}
+
+/// Constant-time check that the returned `state` equals the expected one.
+///
+/// Uses `subtle::ConstantTimeEq` to avoid leaking the state via timing
+/// (Finding 12).
+fn state_matches(expected: &str, actual: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    let e = expected.as_bytes();
+    let a = actual.as_bytes();
+    if e.len() != a.len() {
+        return false;
+    }
+    e.ct_eq(a).into()
 }
 
 /// Wait for the authorization callback and extract the code.
+///
+/// Validates the `state` query parameter against `expected_state` using
+/// constant-time comparison; mismatch or absence is rejected as CSRF
+/// (Finding 12).
 pub async fn wait_for_authorization_callback(
     listener: TcpListener,
     server_name: &str,
+    expected_state: &str,
 ) -> Result<String, AuthError> {
     let timeout = Duration::from_secs(300);
 
@@ -569,46 +620,53 @@ pub async fn wait_for_authorization_callback(
                 .await
                 .map_err(|e| AuthError::Http(e.to_string()))?;
 
-            // Parse GET /callback?code=xxx HTTP/1.1
+            // Parse GET /callback?code=xxx&state=yyy HTTP/1.1
             if let Some(path) = request_line.split_whitespace().nth(1)
                 && path.starts_with("/callback")
-                    && let Some(query) = path.split('?').nth(1) {
-                        // Check for error first
-                        if query.contains("error=") {
-                            let response = "HTTP/1.1 400 Bad Request\r\n\r\nAuthorization denied";
-                            let _ = socket.write_all(response.as_bytes()).await;
-                            return Err(AuthError::AuthorizationDenied);
-                        }
+                && let Some(query) = path.split('?').nth(1)
+            {
+                // Check for error first
+                if query.contains("error=") {
+                    let response = "HTTP/1.1 400 Bad Request\r\n\r\nAuthorization denied";
+                    let _ = socket.write_all(response.as_bytes()).await;
+                    return Err(AuthError::AuthorizationDenied);
+                }
 
-                        // Look for code
-                        for param in query.split('&') {
-                            let parts: Vec<&str> = param.splitn(2, '=').collect();
-                            if parts.len() == 2 && parts[0] == "code" {
-                                let code = urlencoding::decode(parts[1])
-                                    .unwrap_or_else(|_| parts[1].into())
-                                    .into_owned();
+                let (code, state) = parse_callback_query(query);
 
-                                // Send success response
-                                let response = format!(
-                                    "HTTP/1.1 200 OK\r\n\
-                                     Content-Type: text/html\r\n\
-                                     \r\n\
-                                     <!DOCTYPE html><html><body style=\"font-family: sans-serif; \
-                                     display: flex; justify-content: center; align-items: center; \
-                                     height: 100vh; margin: 0; background: #191919; color: white;\">\
-                                     <div style=\"text-align: center;\">\
-                                     <h1>✓ {} Connected!</h1>\
-                                     <p>You can close this window.</p>\
-                                     </div></body></html>",
-                                    server_name
-                                );
-                                let _ = socket.write_all(response.as_bytes()).await;
-                                let _ = socket.shutdown().await;
+                // CSRF protection: state MUST be present and match expected.
+                let state_ok = match state.as_deref() {
+                    Some(actual) => state_matches(expected_state, actual),
+                    None => false,
+                };
+                if !state_ok {
+                    let response =
+                        "HTTP/1.1 400 Bad Request\r\n\r\nState parameter mismatch";
+                    let _ = socket.write_all(response.as_bytes()).await;
+                    return Err(AuthError::StateMismatch);
+                }
 
-                                return Ok(code);
-                            }
-                        }
-                    }
+                if let Some(code) = code {
+                    // Send success response
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\n\
+                         Content-Type: text/html\r\n\
+                         \r\n\
+                         <!DOCTYPE html><html><body style=\"font-family: sans-serif; \
+                         display: flex; justify-content: center; align-items: center; \
+                         height: 100vh; margin: 0; background: #191919; color: white;\">\
+                         <div style=\"text-align: center;\">\
+                         <h1>✓ {} Connected!</h1>\
+                         <p>You can close this window.</p>\
+                         </div></body></html>",
+                        server_name
+                    );
+                    let _ = socket.write_all(response.as_bytes()).await;
+                    let _ = socket.shutdown().await;
+
+                    return Ok(code);
+                }
+            }
 
             let response = "HTTP/1.1 404 Not Found\r\n\r\n";
             let _ = socket.write_all(response.as_bytes()).await;
@@ -880,7 +938,7 @@ mod tests {
 
     #[test]
     fn test_build_authorization_url() {
-        let url = build_authorization_url(
+        let (url, state) = build_authorization_url(
             "https://auth.example.com/authorize",
             "client-123",
             "http://localhost:9876/callback",
@@ -894,12 +952,15 @@ mod tests {
         assert!(url.contains("response_type=code"));
         assert!(url.contains("redirect_uri="));
         assert!(url.contains("scope=read%20write"));
+        // state was generated and is included in URL
+        assert!(!state.is_empty());
+        assert!(url.contains(&format!("state={}", urlencoding::encode(&state))));
     }
 
     #[test]
     fn test_build_authorization_url_with_pkce() {
         let pkce = PkceChallenge::generate();
-        let url = build_authorization_url(
+        let (url, _state) = build_authorization_url(
             "https://auth.example.com/authorize",
             "client-123",
             "http://localhost:9876/callback",
@@ -918,7 +979,7 @@ mod tests {
         extra.insert("owner".to_string(), "user".to_string());
         extra.insert("state".to_string(), "abc123".to_string());
 
-        let url = build_authorization_url(
+        let (url, state) = build_authorization_url(
             "https://auth.example.com/authorize",
             "client-123",
             "http://localhost:9876/callback",
@@ -929,5 +990,104 @@ mod tests {
 
         assert!(url.contains("owner=user"));
         assert!(url.contains("state=abc123"));
+        // When state is provided in extra_params, it's returned verbatim
+        assert_eq!(state, "abc123");
+    }
+
+    #[test]
+    fn test_state_matches_constant_time() {
+        assert!(state_matches("abc123", "abc123"));
+        assert!(!state_matches("abc123", "abc124"));
+        assert!(!state_matches("abc123", "abc12"));
+        assert!(!state_matches("", "abc"));
+        assert!(state_matches("", ""));
+    }
+
+    #[test]
+    fn test_parse_callback_query_extracts_code_and_state() {
+        let (code, state) = parse_callback_query("code=abc&state=xyz");
+        assert_eq!(code.as_deref(), Some("abc"));
+        assert_eq!(state.as_deref(), Some("xyz"));
+    }
+
+    #[test]
+    fn test_parse_callback_query_url_decodes() {
+        let (code, state) = parse_callback_query("code=a%2Bb&state=s%20t");
+        assert_eq!(code.as_deref(), Some("a+b"));
+        assert_eq!(state.as_deref(), Some("s t"));
+    }
+
+    #[test]
+    fn test_parse_callback_query_missing_state() {
+        let (code, state) = parse_callback_query("code=abc");
+        assert_eq!(code.as_deref(), Some("abc"));
+        assert!(state.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_callback_rejects_mismatched_state() {
+        // Bind a listener, fire a fake callback request with the wrong state,
+        // and assert StateMismatch is returned (Finding 12 TDD).
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let server_handle = tokio::spawn(async move {
+            wait_for_authorization_callback(listener, "test", "expected-state").await
+        });
+
+        // Brief wait for the listener to be in accept()
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        let req = b"GET /callback?code=somecode&state=wrong-state HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        stream.write_all(req).await.unwrap();
+
+        let result = server_handle.await.unwrap();
+        assert!(matches!(result, Err(AuthError::StateMismatch)));
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_callback_accepts_matched_state() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let server_handle = tokio::spawn(async move {
+            wait_for_authorization_callback(listener, "test", "right-state").await
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        let req =
+            b"GET /callback?code=goodcode&state=right-state HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        stream.write_all(req).await.unwrap();
+
+        let result = server_handle.await.unwrap();
+        assert_eq!(result.unwrap(), "goodcode");
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_callback_rejects_missing_state() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let server_handle = tokio::spawn(async move {
+            wait_for_authorization_callback(listener, "test", "expected").await
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        let req = b"GET /callback?code=somecode HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        stream.write_all(req).await.unwrap();
+
+        let result = server_handle.await.unwrap();
+        assert!(matches!(result, Err(AuthError::StateMismatch)));
     }
 }
