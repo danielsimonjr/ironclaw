@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use wasmtime::Store;
-use wasmtime::component::{Component, Linker};
-use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime::component::{Component, HasSelf, Linker};
+use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 use crate::context::JobContext;
 use crate::safety::LeakDetector;
@@ -34,8 +34,6 @@ use crate::tools::wasm::runtime::{EPOCH_TICK_INTERVAL, PreparedModule, WasmToolR
 wasmtime::component::bindgen!({
     path: "wit/tool.wit",
     world: "sandboxed-tool",
-    async: false,
-    with: {},
 });
 
 // Alias the export interface types for convenience.
@@ -115,12 +113,11 @@ impl StoreData {
 // Provide WASI context for the WASM component.
 // Required because tools are compiled with wasm32-wasip2 target.
 impl WasiView for StoreData {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -381,11 +378,11 @@ impl WasmToolWrapper {
     /// `near:agent/host` namespace.
     fn add_host_functions(linker: &mut Linker<StoreData>) -> Result<(), WasmError> {
         // Add WASI support (required by components built with wasm32-wasip2)
-        wasmtime_wasi::add_to_linker_sync(linker)
+        wasmtime_wasi::p2::add_to_linker_sync(linker)
             .map_err(|e| WasmError::ConfigError(format!("Failed to add WASI functions: {}", e)))?;
 
         // Add our custom host interface using the generated add_to_linker
-        near::agent::host::add_to_linker(linker, |state| state)
+        near::agent::host::add_to_linker::<_, HasSelf<_>>(linker, |state| state)
             .map_err(|e| WasmError::ConfigError(format!("Failed to add host functions: {}", e)))?;
 
         Ok(())
