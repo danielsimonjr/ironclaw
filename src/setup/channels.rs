@@ -267,7 +267,12 @@ async fn bind_telegram_owner(token: &SecretString) -> Result<Option<i64>, String
             .query(&[("timeout", "30"), ("allowed_updates", "[\"message\"]")])
             .send()
             .await
-            .map_err(|e| format!("getUpdates request failed: {}", redact_telegram_token(&e.to_string())))?;
+            .map_err(|e| {
+                format!(
+                    "getUpdates request failed: {}",
+                    redact_telegram_token(&e.to_string())
+                )
+            })?;
 
         if !response.status().is_success() {
             return Err(format!("getUpdates returned status {}", response.status()));
@@ -450,10 +455,12 @@ pub async fn validate_telegram_token(token: &SecretString) -> Result<Option<Stri
         return Err(format!("API returned status {}", response.status()));
     }
 
-    let body: TelegramGetMeResponse = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", redact_telegram_token(&e.to_string())))?;
+    let body: TelegramGetMeResponse = response.json().await.map_err(|e| {
+        format!(
+            "Failed to parse response: {}",
+            redact_telegram_token(&e.to_string())
+        )
+    })?;
 
     if body.ok {
         Ok(body.result.and_then(|u| u.username))

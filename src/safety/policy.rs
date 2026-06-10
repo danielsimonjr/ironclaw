@@ -148,31 +148,40 @@ impl Default for Policy {
 
         // S-10: Detect path traversal variants including URL-encoded,
         // double-encoded, and backslash variants.
-        policy.add_rule(PolicyRule::new(
-            "path_traversal",
-            "Path traversal attempt detected",
-            r"(?i)(\.\.[\\/]|%2e%2e[/\\%]|%252e%252e|\.%2e[/\\]|%2e\.[/\\]|\.\.%2f|\.\.%5c)",
-            Severity::Critical,
-            PolicyAction::Block,
-        ).expect("built-in policy regex must compile"));
+        policy.add_rule(
+            PolicyRule::new(
+                "path_traversal",
+                "Path traversal attempt detected",
+                r"(?i)(\.\.[\\/]|%2e%2e[/\\%]|%252e%252e|\.%2e[/\\]|%2e\.[/\\]|\.\.%2f|\.\.%5c)",
+                Severity::Critical,
+                PolicyAction::Block,
+            )
+            .expect("built-in policy regex must compile"),
+        );
 
         // Block cryptocurrency private key patterns
-        policy.add_rule(PolicyRule::new(
-            "crypto_private_key",
-            "Potential cryptocurrency private key",
-            r"(?i)(private.?key|seed.?phrase|mnemonic).{0,20}[0-9a-f]{64}",
-            Severity::Critical,
-            PolicyAction::Block,
-        ).expect("built-in policy regex must compile"));
+        policy.add_rule(
+            PolicyRule::new(
+                "crypto_private_key",
+                "Potential cryptocurrency private key",
+                r"(?i)(private.?key|seed.?phrase|mnemonic).{0,20}[0-9a-f]{64}",
+                Severity::Critical,
+                PolicyAction::Block,
+            )
+            .expect("built-in policy regex must compile"),
+        );
 
         // Warn on SQL-like patterns
-        policy.add_rule(PolicyRule::new(
-            "sql_pattern",
-            "SQL-like pattern detected",
-            r"(?i)(DROP\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET)",
-            Severity::Medium,
-            PolicyAction::Warn,
-        ).expect("built-in policy regex must compile"));
+        policy.add_rule(
+            PolicyRule::new(
+                "sql_pattern",
+                "SQL-like pattern detected",
+                r"(?i)(DROP\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET)",
+                Severity::Medium,
+                PolicyAction::Warn,
+            )
+            .expect("built-in policy regex must compile"),
+        );
 
         // Block shell command injection patterns (expanded: &&, ||, $(), backticks)
         policy.add_rule(PolicyRule::new(
@@ -184,31 +193,40 @@ impl Default for Policy {
         ).expect("built-in policy regex must compile"));
 
         // Warn on excessive URLs
-        policy.add_rule(PolicyRule::new(
-            "excessive_urls",
-            "Excessive number of URLs detected",
-            r"(https?://[^\s]+\s*){10,}",
-            Severity::Low,
-            PolicyAction::Warn,
-        ).expect("built-in policy regex must compile"));
+        policy.add_rule(
+            PolicyRule::new(
+                "excessive_urls",
+                "Excessive number of URLs detected",
+                r"(https?://[^\s]+\s*){10,}",
+                Severity::Low,
+                PolicyAction::Warn,
+            )
+            .expect("built-in policy regex must compile"),
+        );
 
         // Block encoded payloads that look like exploits
-        policy.add_rule(PolicyRule::new(
-            "encoded_exploit",
-            "Potential encoded exploit payload",
-            r"(?i)(base64_decode|eval\s*\(\s*base64|atob\s*\()",
-            Severity::High,
-            PolicyAction::Sanitize,
-        ).expect("built-in policy regex must compile"));
+        policy.add_rule(
+            PolicyRule::new(
+                "encoded_exploit",
+                "Potential encoded exploit payload",
+                r"(?i)(base64_decode|eval\s*\(\s*base64|atob\s*\()",
+                Severity::High,
+                PolicyAction::Sanitize,
+            )
+            .expect("built-in policy regex must compile"),
+        );
 
         // Warn on very long strings without spaces (potential obfuscation)
-        policy.add_rule(PolicyRule::new(
-            "obfuscated_string",
-            "Potential obfuscated content",
-            r"[^\s]{500,}",
-            Severity::Medium,
-            PolicyAction::Warn,
-        ).expect("built-in policy regex must compile"));
+        policy.add_rule(
+            PolicyRule::new(
+                "obfuscated_string",
+                "Potential obfuscated content",
+                r"[^\s]{500,}",
+                Severity::Medium,
+                PolicyAction::Warn,
+            )
+            .expect("built-in policy regex must compile"),
+        );
 
         policy
     }

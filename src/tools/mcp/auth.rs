@@ -674,8 +674,7 @@ pub async fn wait_for_authorization_callback(
                     None => false,
                 };
                 if !state_ok {
-                    let response =
-                        "HTTP/1.1 400 Bad Request\r\n\r\nState parameter mismatch";
+                    let response = "HTTP/1.1 400 Bad Request\r\n\r\nState parameter mismatch";
                     let _ = socket.write_all(response.as_bytes()).await;
                     return Err(AuthError::StateMismatch);
                 }
@@ -1112,7 +1111,8 @@ mod tests {
         let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
             .await
             .unwrap();
-        let req = b"GET /callback?code=somecode&state=wrong-state HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let req =
+            b"GET /callback?code=somecode&state=wrong-state HTTP/1.1\r\nHost: localhost\r\n\r\n";
         stream.write_all(req).await.unwrap();
 
         let result = server_handle.await.unwrap();

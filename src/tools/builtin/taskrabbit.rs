@@ -213,7 +213,10 @@ mod tests {
 
     #[test]
     fn test_estimated_cost_other_action() {
-        assert_eq!(tool().estimated_cost(&json!({"action": "search_taskers"})), None);
+        assert_eq!(
+            tool().estimated_cost(&json!({"action": "search_taskers"})),
+            None
+        );
         assert_eq!(tool().estimated_cost(&json!({"action": "get_quote"})), None);
     }
 
@@ -225,7 +228,10 @@ mod tests {
             .unwrap();
         let data = &result.result;
         assert!(data["taskers"].is_array());
-        assert_eq!(data["message"], "TaskRabbit integration not yet implemented");
+        assert_eq!(
+            data["message"],
+            "TaskRabbit integration not yet implemented"
+        );
     }
 
     #[tokio::test]
@@ -271,10 +277,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_action() {
-        let err = tool()
-            .execute(json!({}), &ctx())
-            .await
-            .unwrap_err();
+        let err = tool().execute(json!({}), &ctx()).await.unwrap_err();
         assert!(matches!(err, ToolError::InvalidParameters(_)));
     }
 

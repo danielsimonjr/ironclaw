@@ -151,7 +151,10 @@ mod tests {
         let mapping = CredentialMapping::default();
         assert!(mapping.domain.is_empty());
         assert!(mapping.secret_name.is_empty());
-        assert!(matches!(mapping.location, CredentialLocation::AuthorizationBearer));
+        assert!(matches!(
+            mapping.location,
+            CredentialLocation::AuthorizationBearer
+        ));
     }
 
     #[test]
@@ -179,13 +182,34 @@ mod tests {
     #[test]
     fn test_sandbox_policy_from_str_aliases() {
         use std::str::FromStr;
-        assert_eq!(SandboxPolicy::from_str("ro").unwrap(), SandboxPolicy::ReadOnly);
-        assert_eq!(SandboxPolicy::from_str("rw").unwrap(), SandboxPolicy::WorkspaceWrite);
-        assert_eq!(SandboxPolicy::from_str("full").unwrap(), SandboxPolicy::FullAccess);
-        assert_eq!(SandboxPolicy::from_str("READONLY").unwrap(), SandboxPolicy::ReadOnly);
-        assert_eq!(SandboxPolicy::from_str("read_only").unwrap(), SandboxPolicy::ReadOnly);
-        assert_eq!(SandboxPolicy::from_str("workspacewrite").unwrap(), SandboxPolicy::WorkspaceWrite);
-        assert_eq!(SandboxPolicy::from_str("fullaccess").unwrap(), SandboxPolicy::FullAccess);
+        assert_eq!(
+            SandboxPolicy::from_str("ro").unwrap(),
+            SandboxPolicy::ReadOnly
+        );
+        assert_eq!(
+            SandboxPolicy::from_str("rw").unwrap(),
+            SandboxPolicy::WorkspaceWrite
+        );
+        assert_eq!(
+            SandboxPolicy::from_str("full").unwrap(),
+            SandboxPolicy::FullAccess
+        );
+        assert_eq!(
+            SandboxPolicy::from_str("READONLY").unwrap(),
+            SandboxPolicy::ReadOnly
+        );
+        assert_eq!(
+            SandboxPolicy::from_str("read_only").unwrap(),
+            SandboxPolicy::ReadOnly
+        );
+        assert_eq!(
+            SandboxPolicy::from_str("workspacewrite").unwrap(),
+            SandboxPolicy::WorkspaceWrite
+        );
+        assert_eq!(
+            SandboxPolicy::from_str("fullaccess").unwrap(),
+            SandboxPolicy::FullAccess
+        );
     }
 
     #[test]
@@ -204,7 +228,12 @@ mod tests {
     #[test]
     fn test_anthropic_credential_uses_header() {
         let mappings = default_credential_mappings();
-        let anthropic = mappings.iter().find(|m| m.domain == "api.anthropic.com").unwrap();
-        assert!(matches!(anthropic.location, CredentialLocation::Header(ref h) if h == "x-api-key"));
+        let anthropic = mappings
+            .iter()
+            .find(|m| m.domain == "api.anthropic.com")
+            .unwrap();
+        assert!(
+            matches!(anthropic.location, CredentialLocation::Header(ref h) if h == "x-api-key")
+        );
     }
 }

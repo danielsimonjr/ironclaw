@@ -132,9 +132,7 @@ mod tests {
     #[tokio::test]
     async fn start_on_occupied_port_returns_error() {
         // Bind a port first so it's occupied.
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let occupied_addr = listener.local_addr().unwrap();
 
         let config = WebhookServerConfig {

@@ -185,7 +185,10 @@ mod tests {
             .unwrap();
         let data = &result.result;
         assert_eq!(data["query"], "laptop");
-        assert_eq!(data["message"], "E-commerce integration not yet implemented");
+        assert_eq!(
+            data["message"],
+            "E-commerce integration not yet implemented"
+        );
     }
 
     #[tokio::test]
@@ -201,7 +204,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_product() {
         let result = tool()
-            .execute(json!({"action": "get_product", "product_id": "B001"}), &ctx())
+            .execute(
+                json!({"action": "get_product", "product_id": "B001"}),
+                &ctx(),
+            )
             .await
             .unwrap();
         let data = &result.result;
@@ -240,10 +246,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_action() {
-        let err = tool()
-            .execute(json!({}), &ctx())
-            .await
-            .unwrap_err();
+        let err = tool().execute(json!({}), &ctx()).await.unwrap_err();
         assert!(matches!(err, ToolError::InvalidParameters(_)));
     }
 

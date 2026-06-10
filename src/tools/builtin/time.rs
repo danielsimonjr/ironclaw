@@ -197,7 +197,10 @@ mod tests {
             "timestamp2": "2024-01-15T11:30:00Z"
         });
         let output = tool.execute(params, &ctx).await.unwrap();
-        assert_eq!(output.result.get("seconds").unwrap().as_i64().unwrap(), 5400);
+        assert_eq!(
+            output.result.get("seconds").unwrap().as_i64().unwrap(),
+            5400
+        );
         assert_eq!(output.result.get("minutes").unwrap().as_i64().unwrap(), 90);
         assert_eq!(output.result.get("hours").unwrap().as_i64().unwrap(), 1);
         assert_eq!(output.result.get("days").unwrap().as_i64().unwrap(), 0);

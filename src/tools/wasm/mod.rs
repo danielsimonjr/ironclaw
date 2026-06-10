@@ -181,17 +181,16 @@ mod tests {
 
     #[test]
     fn test_http_capability_new() {
-        let cap = HttpCapability::new(vec![
-            EndpointPattern::host("api.openai.com"),
-        ]);
+        let cap = HttpCapability::new(vec![EndpointPattern::host("api.openai.com")]);
         assert_eq!(cap.allowlist.len(), 1);
     }
 
     #[test]
     fn test_capabilities_with_http() {
-        let caps = Capabilities::none().with_http(HttpCapability::new(vec![
-            EndpointPattern::host("example.com"),
-        ]));
+        let caps =
+            Capabilities::none().with_http(HttpCapability::new(vec![EndpointPattern::host(
+                "example.com",
+            )]));
         assert!(caps.http.is_some());
         assert_eq!(caps.http.unwrap().allowlist.len(), 1);
     }
@@ -214,9 +213,7 @@ mod tests {
 
     #[test]
     fn test_allowlist_validator_creation() {
-        let validator = AllowlistValidator::new(vec![
-            EndpointPattern::host("api.example.com"),
-        ]);
+        let validator = AllowlistValidator::new(vec![EndpointPattern::host("api.example.com")]);
         // Should not panic
         drop(validator);
     }

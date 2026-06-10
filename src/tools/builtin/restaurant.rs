@@ -221,7 +221,10 @@ mod tests {
             .unwrap();
         let data = &result.result;
         assert_eq!(data["query"], "italian");
-        assert_eq!(data["message"], "Restaurant integration not yet implemented");
+        assert_eq!(
+            data["message"],
+            "Restaurant integration not yet implemented"
+        );
     }
 
     #[tokio::test]
@@ -237,12 +240,18 @@ mod tests {
     #[tokio::test]
     async fn test_check_availability() {
         let result = tool()
-            .execute(json!({"action": "check_availability", "restaurant_id": "r123"}), &ctx())
+            .execute(
+                json!({"action": "check_availability", "restaurant_id": "r123"}),
+                &ctx(),
+            )
             .await
             .unwrap();
         let data = &result.result;
         assert_eq!(data["restaurant_id"], "r123");
-        assert_eq!(data["message"], "Restaurant integration not yet implemented");
+        assert_eq!(
+            data["message"],
+            "Restaurant integration not yet implemented"
+        );
     }
 
     #[tokio::test]
@@ -277,7 +286,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_reservation() {
         let result = tool()
-            .execute(json!({"action": "get_reservation", "reservation_id": "res1"}), &ctx())
+            .execute(
+                json!({"action": "get_reservation", "reservation_id": "res1"}),
+                &ctx(),
+            )
             .await
             .unwrap();
         let data = &result.result;
@@ -287,10 +299,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_action() {
-        let err = tool()
-            .execute(json!({}), &ctx())
-            .await
-            .unwrap_err();
+        let err = tool().execute(json!({}), &ctx()).await.unwrap_err();
         assert!(matches!(err, ToolError::InvalidParameters(_)));
     }
 

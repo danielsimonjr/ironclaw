@@ -298,7 +298,13 @@ mod tests {
         let json = serde_json::to_value(&src).unwrap();
         assert_eq!(json["type"], "wasm_download");
         let back: ExtensionSource = serde_json::from_value(json).unwrap();
-        assert!(matches!(back, ExtensionSource::WasmDownload { capabilities_url: Some(_), .. }));
+        assert!(matches!(
+            back,
+            ExtensionSource::WasmDownload {
+                capabilities_url: Some(_),
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -309,7 +315,13 @@ mod tests {
         };
         let json = serde_json::to_value(&src).unwrap();
         let back: ExtensionSource = serde_json::from_value(json).unwrap();
-        assert!(matches!(back, ExtensionSource::WasmDownload { capabilities_url: None, .. }));
+        assert!(matches!(
+            back,
+            ExtensionSource::WasmDownload {
+                capabilities_url: None,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -321,7 +333,13 @@ mod tests {
         let json = serde_json::to_value(&src).unwrap();
         assert_eq!(json["type"], "wasm_buildable");
         let back: ExtensionSource = serde_json::from_value(json).unwrap();
-        assert!(matches!(back, ExtensionSource::WasmBuildable { build_dir: Some(_), .. }));
+        assert!(matches!(
+            back,
+            ExtensionSource::WasmBuildable {
+                build_dir: Some(_),
+                ..
+            }
+        ));
     }
 
     #[test]

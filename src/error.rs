@@ -450,9 +450,10 @@ mod tests {
     fn test_config_error_missing_env_var_display() {
         let err = ConfigError::MissingEnvVar("DATABASE_URL".to_string());
         assert!(err.to_string().contains("DATABASE_URL"));
-        assert!(err
-            .to_string()
-            .contains("Missing required environment variable"));
+        assert!(
+            err.to_string()
+                .contains("Missing required environment variable")
+        );
     }
 
     #[test]
