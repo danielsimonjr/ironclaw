@@ -1,2 +1,8 @@
 [workspace]
+# cargo-dist's release.yml owns the GitHub Release (it uploads installers),
+# so release-plz must not create a competing one.
 git_release_enable = false
+# No crates.io publishing: ironclaw is distributed via GitHub Releases +
+# installers only. With publish = false release-plz needs no
+# CARGO_REGISTRY_TOKEN and determines released versions from git tags.
+publish = false

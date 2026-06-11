@@ -43,6 +43,11 @@ on:
   push:
     tags:
       - '**[0-9]+.[0-9]+.[0-9]+*'
+  # Allows release-plz to dispatch this workflow at a freshly-created tag.
+  # Tags created with the built-in GITHUB_TOKEN don't emit a push event, so
+  # release-plz.yml runs `gh workflow run release.yml --ref <tag>` instead.
+  # (Keep this trigger if regenerating with `dist generate`.)
+  workflow_dispatch:
 
 jobs:
   # Run 'dist plan' (or host) to determine what tasks we need to do
