@@ -184,6 +184,10 @@ lto = "thin"
 cargo-dist-version = "0.30.3"
 # CI backends to support
 ci = "github"
+# release.yml is intentionally customized (workflow_dispatch trigger so
+# release-plz can dispatch it at GITHUB_TOKEN-created tags); skip dist's
+# generated-workflow integrity check for it.
+allow-dirty = ["ci"]
 # The installers to generate for each app
 installers = ["shell", "powershell", "npm", "msi"]
 # Publish jobs to run in CI
