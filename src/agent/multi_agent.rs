@@ -265,7 +265,7 @@ impl AgentRouter {
 
         // Sort agents by priority descending so higher-priority agents win ties.
         let mut sorted: Vec<&&AgentIdentity> = agents.iter().collect();
-        sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted.sort_by_key(|a| std::cmp::Reverse(a.priority));
 
         for agent in sorted {
             let mention = format!("@{}", agent.name.to_lowercase());

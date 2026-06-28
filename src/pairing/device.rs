@@ -224,7 +224,7 @@ impl DevicePairingManager {
     pub async fn list_devices(&self) -> Vec<DeviceInfo> {
         let devices = self.devices.read().await;
         let mut list: Vec<DeviceInfo> = devices.values().cloned().collect();
-        list.sort_by(|a, b| a.paired_at.cmp(&b.paired_at));
+        list.sort_by_key(|a| a.paired_at);
         list
     }
 

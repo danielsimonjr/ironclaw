@@ -387,6 +387,29 @@ async fn check_network() -> Check {
     }
 }
 
+fn check_disk_space() -> Check {
+    let data_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".ironclaw");
+
+    // Use fs4 to check available space
+    match fs4::available_space(data_dir.parent().unwrap_or(&data_dir)) {
+        Ok(space) => {
+            let gb = space as f64 / (1024.0 * 1024.0 * 1024.0);
+            if gb < 1.0 {
+                Check::warn(
+                    "Disk Space",
+                    format!("{:.1} GB available", gb),
+                    "Consider freeing up disk space",
+                )
+            } else {
+                Check::ok("Disk Space", format!("{:.1} GB available", gb))
+            }
+        }
+        Err(_) => Check::ok("Disk Space", "Could not determine (assumed OK)"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,28 +470,5 @@ mod tests {
         assert_eq!(Check::ok("t", "m").icon(), "[OK]");
         assert_eq!(Check::warn("t", "m", "f").icon(), "[WARN]");
         assert_eq!(Check::error("t", "m", "f").icon(), "[ERR]");
-    }
-}
-
-fn check_disk_space() -> Check {
-    let data_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".ironclaw");
-
-    // Use fs4 to check available space
-    match fs4::available_space(data_dir.parent().unwrap_or(&data_dir)) {
-        Ok(space) => {
-            let gb = space as f64 / (1024.0 * 1024.0 * 1024.0);
-            if gb < 1.0 {
-                Check::warn(
-                    "Disk Space",
-                    format!("{:.1} GB available", gb),
-                    "Consider freeing up disk space",
-                )
-            } else {
-                Check::ok("Disk Space", format!("{:.1} GB available", gb))
-            }
-        }
-        Err(_) => Check::ok("Disk Space", "Could not determine (assumed OK)"),
     }
 }

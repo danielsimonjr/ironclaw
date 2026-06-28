@@ -261,7 +261,7 @@ mod tests {
     fn extension_kind_clone_copy_eq() {
         let a = ExtensionKind::McpServer;
         let b = a; // Copy
-        let c = a.clone(); // Clone
+        let c = a; // Clone
         assert_eq!(a, b);
         assert_eq!(a, c);
     }

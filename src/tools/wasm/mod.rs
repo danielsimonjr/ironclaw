@@ -135,12 +135,12 @@ mod tests {
 
     #[test]
     fn test_default_fuel_limit() {
-        assert!(DEFAULT_FUEL_LIMIT > 0);
+        const { assert!(DEFAULT_FUEL_LIMIT > 0) };
     }
 
     #[test]
     fn test_default_memory_limit() {
-        assert!(DEFAULT_MEMORY_LIMIT > 0);
+        const { assert!(DEFAULT_MEMORY_LIMIT > 0) };
     }
 
     #[test]

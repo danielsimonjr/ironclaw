@@ -19,10 +19,15 @@
 
 use crate::secrets::SecretError;
 
+// These are consumed only by the macOS/Linux `platform` modules below; the
+// fallback module for other targets (e.g. Windows) doesn't reference them, so
+// silence dead_code there while keeping the lint live where they're used.
 /// Service name for keychain entries.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 const SERVICE_NAME: &str = "ironclaw";
 
 /// Account name for the master key.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 const MASTER_KEY_ACCOUNT: &str = "master_key";
 
 /// Generate a random 32-byte master key using OS-level RNG.
@@ -261,6 +266,7 @@ mod platform {
 pub use platform::{delete_master_key, get_master_key, has_master_key, store_master_key};
 
 /// Parse a hex string to bytes.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, SecretError> {
     if !hex.len().is_multiple_of(2) {
         return Err(SecretError::KeychainError(

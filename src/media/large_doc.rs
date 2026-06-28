@@ -716,10 +716,8 @@ impl LargeDocumentProcessor {
 
                 // Track chunk access
                 match op {
-                    RlmOperation::ReadChunk { index } => {
-                        if !stats.chunks_accessed.contains(index) {
-                            stats.chunks_accessed.push(*index);
-                        }
+                    RlmOperation::ReadChunk { index } if !stats.chunks_accessed.contains(index) => {
+                        stats.chunks_accessed.push(*index);
                     }
                     RlmOperation::SubQuery { chunk_indices, .. } => {
                         for idx in chunk_indices {

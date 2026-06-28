@@ -346,7 +346,7 @@ impl Sanitizer {
         }
 
         // Sort warnings by severity (critical first)
-        warnings.sort_by(|a, b| b.severity.cmp(&a.severity));
+        warnings.sort_by_key(|a| std::cmp::Reverse(a.severity));
 
         // Escape content on Critical or High severity
         let has_critical_or_high = warnings

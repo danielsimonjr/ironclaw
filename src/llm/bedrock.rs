@@ -566,10 +566,8 @@ impl LlmProvider for BedrockProvider {
         {
             for content in message.content {
                 match content {
-                    ConverseContent::Text { text } => {
-                        if !text.is_empty() {
-                            text_content = Some(text);
-                        }
+                    ConverseContent::Text { text } if !text.is_empty() => {
+                        text_content = Some(text);
                     }
                     ConverseContent::ToolUse { tool_use } => {
                         tool_calls.push(ToolCall {

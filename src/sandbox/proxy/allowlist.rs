@@ -210,10 +210,8 @@ pub fn extract_host(url: &str) -> Option<String> {
     // Determine scheme and extract the rest
     let rest = if let Some(stripped) = url.strip_prefix("https://") {
         stripped
-    } else if let Some(stripped) = url.strip_prefix("http://") {
-        stripped
     } else {
-        return None;
+        url.strip_prefix("http://")?
     };
 
     // Find the end of the host (start of path, query, or end of string)

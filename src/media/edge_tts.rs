@@ -282,12 +282,11 @@ impl TtsProvider for EdgeTtsProvider {
                         }
                     }
                 }
-                tungstenite::Message::Text(text_msg) => {
+                tungstenite::Message::Text(text_msg)
                     // "turn.end" signals the synthesis is complete
-                    if text_msg.contains("turn.end") {
+                    if text_msg.contains("turn.end") => {
                         break;
                     }
-                }
                 tungstenite::Message::Close(_) => break,
                 _ => {}
             }

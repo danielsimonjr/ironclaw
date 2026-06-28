@@ -148,7 +148,7 @@ impl PresenceTracker {
             .filter(|e| self.is_active(e))
             .cloned()
             .collect();
-        active.sort_by(|a, b| b.last_seen.cmp(&a.last_seen));
+        active.sort_by_key(|a| std::cmp::Reverse(a.last_seen));
         active
     }
 

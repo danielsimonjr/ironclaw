@@ -463,10 +463,8 @@ impl LlmProvider for GeminiProvider {
         {
             for part in content.parts {
                 match part {
-                    GeminiPart::Text { text } => {
-                        if !text.is_empty() {
-                            text_content = Some(text);
-                        }
+                    GeminiPart::Text { text } if !text.is_empty() => {
+                        text_content = Some(text);
                     }
                     GeminiPart::FunctionCall { function_call } => {
                         tool_calls.push(ToolCall {
