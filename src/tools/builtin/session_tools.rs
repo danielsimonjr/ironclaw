@@ -102,7 +102,7 @@ impl Tool for SessionListTool {
             self.session_manager.sessions.read().await;
 
         let mut infos: Vec<SessionInfo> = Vec::new();
-        for (_user_id, session_arc) in sessions_lock.iter() {
+        for session_arc in sessions_lock.values() {
             if let Ok(sess) = session_arc.try_lock() {
                 // If a kind filter is provided, check session metadata for a
                 // "kind" field. Sessions without a matching kind are skipped.
@@ -223,7 +223,7 @@ impl Tool for SessionHistoryTool {
             self.session_manager.sessions.read().await;
 
         let mut target_session = None;
-        for (_user_id, session_arc) in sessions_lock.iter() {
+        for session_arc in sessions_lock.values() {
             if let Ok(sess) = session_arc.try_lock()
                 && sess.id == session_id
             {
@@ -406,7 +406,7 @@ impl Tool for SessionSendTool {
             self.session_manager.sessions.read().await;
 
         let mut target_session_arc: Option<Arc<Mutex<Session>>> = None;
-        for (_user_id, session_arc) in sessions_lock.iter() {
+        for session_arc in sessions_lock.values() {
             if let Ok(sess) = session_arc.try_lock()
                 && sess.id == session_id
             {
