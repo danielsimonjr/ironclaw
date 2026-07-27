@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13](https://github.com/danielsimonjr/ironclaw/compare/v0.1.12...v0.1.13) - 2026-07-27
+
+### Fixed
+
+- *(lint)* resolve clippy errors surfaced by rustc 1.97
+
+### Other
+
+- *(deps)* bump serde_with from 3.16.1 to 3.21.0 ([#42](https://github.com/danielsimonjr/ironclaw/pull/42))
+
 ## [0.1.12](https://github.com/danielsimonjr/ironclaw/compare/v0.1.11...v0.1.12) - 2026-07-08
 
 ### Added
