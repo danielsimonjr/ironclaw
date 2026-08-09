@@ -2538,7 +2538,7 @@ dependencies = [
 
 [[package]]
 name = "ironclaw"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
