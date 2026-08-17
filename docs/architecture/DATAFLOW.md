@@ -22,7 +22,14 @@
 
 ## Overview
 
-Data flows through IronClaw in a layered, event-driven architecture. Messages enter through Channels, pass through the Agent loop for parsing and routing, are dispatched to Workers for LLM reasoning and tool execution, and flow back out through the same channel. All tool outputs pass through the Safety layer before reaching the LLM.
+Data moves through IronClaw in layers, and an event drives each step.
+
+1. A message enters through a Channel.
+2. The Agent loop parses the message and routes it.
+3. The Scheduler sends the job to a Worker for LLM reasoning and tool execution.
+4. The response leaves through the same Channel.
+
+Every tool output passes through the Safety layer before the output reaches the LLM.
 
 ```
 +-------------------------------------------------------------------+
@@ -740,3 +747,17 @@ sequenceDiagram
 ### Outbound Webhooks
 
 Outbound webhook actions sign payloads with HMAC-SHA256 and include automatic retry with exponential backoff. The payload includes the event type, content, timestamp, and hook metadata.
+
+
+## Verification
+
+Generated 2026-08-16 by `repo_map.py map`.
+Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+
+| Claim | Value | Source |
+|---|---|---|
+| totalSourceFiles | 288 | dependency-graph.json |
+| entryRoots | 14 | dependency-graph.json |
+
+**Claims that the gate cannot hold.** Each stage of the flow comes from a reading of the
+source. `entryRoots` is 14 because this is a Cargo workspace; see DEPENDENCY_GRAPH.md.

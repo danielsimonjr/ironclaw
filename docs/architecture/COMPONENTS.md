@@ -976,3 +976,17 @@ Additional domain tools: `ecommerce.rs`, `marketplace.rs`, `restaurant.rs`, `tas
 - `LlmProvider` is shared via `Arc<dyn LlmProvider>`
 - `Workspace` is shared via `Arc<Workspace>`
 - `Config` is loaded once at startup; `HotReloadConfig<Config>` enables runtime updates
+
+
+## Verification
+
+Generated 2026-08-16 by `repo_map.py map`.
+Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+
+| Claim | Value | Source |
+|---|---|---|
+| totalSourceFiles | 288 | dependency-graph.json |
+| totalExports | 2739 | dependency-graph.json |
+
+**Claims that the gate cannot hold.** Each component description and every sharing rule
+(`Arc`, `RwLock`) comes from a reading of the source, not from a metric.

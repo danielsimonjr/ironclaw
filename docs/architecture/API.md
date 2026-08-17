@@ -839,7 +839,16 @@ Cancel an in-progress auth flow.
 ```
 
 #### GET /api/chat/events
-SSE endpoint for real-time events. Returns a `text/event-stream` with events: `response`, `thinking`, `tool_started`, `tool_completed`, `tool_result`, `stream_chunk`, `status`, `job_started`, `approval_needed`, `auth_required`, `auth_completed`, `error`, `heartbeat`, `job_message`, `job_tool_use`, `job_tool_result`, `job_status`, `job_result`, `channel_status`, `config_changed`, `canvas_created`, `canvas_updated`, `canvas_deleted`.
+SSE endpoint for real-time events. The endpoint returns a `text/event-stream`.
+
+The stream carries the events below.
+
+- Response: `response`, `thinking`, `stream_chunk`
+- Tool: `tool_started`, `tool_completed`, `tool_result`
+- Job: `job_started`, `job_message`, `job_tool_use`, `job_tool_result`, `job_status`, `job_result`
+- Authorization: `approval_needed`, `auth_required`, `auth_completed`
+- Canvas: `canvas_created`, `canvas_updated`, `canvas_deleted`
+- Status: `status`, `channel_status`, `config_changed`, `heartbeat`, `error`
 
 #### GET /api/chat/ws
 WebSocket endpoint for bidirectional real-time communication. Requires `Origin` header from localhost. Client sends `WsClientMessage` (message, approval, auth_token, auth_cancel, ping), server sends `WsServerMessage` (event, pong, error).
@@ -1442,3 +1451,21 @@ Wraps all domain-specific error types via `#[from]`.
 | `RateLimited` | `Option<Duration>` | Rate limited |
 | `ExternalService` | `String` | External service error |
 | `Sandbox` | `String` | Sandbox error |
+
+
+## Verification
+
+Generated 2026-08-16 by `repo_map.py map`.
+Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+
+| Claim | Value | Source |
+|---|---|---|
+| totalExports | 2739 | dependency-graph.json |
+| totalSourceFiles | 288 | dependency-graph.json |
+
+**Claims that the gate cannot hold.** Every signature and error variant above comes from a
+reading of the source.
+
+`totalExports` counts every `pub` item in the workspace. The count is larger than the surface
+this document gives, because this document gives the intended API. The two figures differ on
+purpose.

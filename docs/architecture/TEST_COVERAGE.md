@@ -308,3 +308,18 @@ From `CLAUDE.md`:
 **Document Version**: 1.2
 **Last Updated**: 2026-02-24
 **Maintained By**: Daniel Simon Jr.
+
+
+## Verification
+
+Generated 2026-08-16 by `repo_map.py map`.
+Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+
+| Claim | Value | Source |
+|---|---|---|
+| totalSourceFiles | 288 | dependency-graph.json |
+| totalLinesOfCode | 141031 | dependency-graph.json |
+
+**Claims that the gate cannot hold.** Every coverage statement comes from a reading of the
+test files. No line-coverage instrumentation is configured, so this document reports coverage
+by component and by behaviour, and gives no percentage.

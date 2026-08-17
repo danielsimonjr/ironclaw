@@ -55,7 +55,9 @@ IronClaw is a secure personal AI assistant built as a composable, trait-based sy
 
 ### 1. Composable Traits
 
-Every major subsystem is defined by a trait (`Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`). Implementations are swapped at runtime via `Arc<dyn Trait>`, enabling pluggable backends without recompilation.
+A trait defines every major subsystem (`Database`, `Channel`, `Tool`, `LlmProvider`,
+`EmbeddingProvider`). The runtime swaps implementations through `Arc<dyn Trait>`. A backend
+therefore changes without a recompilation.
 
 ### 2. Async-First
 
@@ -449,7 +451,13 @@ sequenceDiagram
     AGENT->>AGENT: Enter main message loop
 ```
 
-Non-agent CLI commands (`tool`, `config`, `mcp`, `memory`, `pairing`, `status`, `doctor`, `gateway`, `sessions`, `hooks`, `cron`, `logs`, `message`, `channels`, `plugins`, `webhooks`, `skills`, `agents`, `nodes`, `browser`, `completion`, `update`) exit early with minimal setup.
+Some CLI commands do not start the agent. They exit early, with a minimal setup.
+
+The commands are:
+
+- Configuration: `config`, `mcp`, `pairing`, `hooks`, `webhooks`, `plugins`, `skills`
+- Inspection: `status`, `doctor`, `logs`, `sessions`, `memory`, `channels`, `agents`, `nodes`
+- Action: `tool`, `message`, `cron`, `gateway`, `browser`, `completion`, `update`
 
 ---
 
@@ -499,7 +507,9 @@ Pending --> InProgress --> Completed --> Submitted --> Accepted
 
 ### Local
 
-The worker runs in the same process as the agent. It has direct access to the full `ToolRegistry`, `SafetyLayer`, and `Database`. This is the default mode when sandboxing is disabled.
+The worker runs in the same process as the agent. The worker has direct access to the full
+`ToolRegistry`, `SafetyLayer` and `Database`. This mode is the default when sandboxing is
+off.
 
 ### Sandboxed
 
@@ -629,3 +639,18 @@ cargo test safety::sanitizer::tests       # Run a module's tests
 | `windows-installer.yml` | Release | PowerShell installer upload |
 
 Target platforms: `aarch64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`.
+
+
+## Verification
+
+Generated 2026-08-16 by `repo_map.py map`.
+Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+
+| Claim | Value | Source |
+|---|---|---|
+| totalSourceFiles | 288 | dependency-graph.json |
+| totalLinesOfCode | 141031 | dependency-graph.json |
+| entryRoots | 14 | dependency-graph.json |
+
+**Claims that the gate cannot hold.** The module list, the trait table and the startup
+sequence come from a reading of the source. The CI table comes from the workflow files.
