@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.20](https://github.com/danielsimonjr/ironclaw/compare/v0.1.19...v0.1.20) - 2026-08-17
+
+### Other
+
+- complete the canonical architecture set; both gates green
+
 ## [0.1.19](https://github.com/danielsimonjr/ironclaw/compare/v0.1.18...v0.1.19) - 2026-08-09
 
 ### Added
