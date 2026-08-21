@@ -63,9 +63,22 @@ jobs:
           done
 
   # Create a PR with the new versions and changelog, preparing the next release.
+  #
+  # MUST run AFTER release-plz-release, not beside it. With `publish = false`
+  # release-plz determines which versions are already released FROM GIT TAGS, so a
+  # PR generated before the release job has pushed its tag measures against a tag
+  # that does not exist yet and treats the project as never released -- emitting the
+  # entire history under the next version heading.
+  #
+  # That is not hypothetical. Running concurrently, PR #53 was opened at 09:31:53Z
+  # while the v0.1.21 tag landed at 09:39:46Z, and the PR proposed a v0.1.22 whose
+  # changelog was the whole project history: 0 commits since v0.1.21, 182 lines of
+  # already-shipped entries. CHANGELOG.md had accumulated 9 such full-history dumps
+  # across 23 version sections before this was caught.
   release-plz-pr:
     if: ${{ github.repository_owner == 'danielsimonjr' }}
     name: Release-plz PR
+    needs: release-plz-release
     runs-on: ubuntu-latest
     permissions:
       contents: write
