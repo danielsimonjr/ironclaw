@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22](https://github.com/danielsimonjr/ironclaw/compare/v0.1.21...v0.1.22) - 2026-08-21
+
+### Fixed
+
+- *(release)* serialise release-plz jobs and de-duplicate CHANGELOG
+
 ### Fixed
 
 - Serialised the release-plz workflow jobs and collapsed 1807 duplicated changelog
