@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23](https://github.com/danielsimonjr/ironclaw/compare/v0.1.22...v0.1.23) - 2026-08-24
+
+### Other
+
+- *(deps)* bump tokio-postgres from 0.7.16 to 0.7.18 ([#57](https://github.com/danielsimonjr/ironclaw/pull/57))
+- *(deps)* bump postgres-protocol from 0.6.10 to 0.6.12 ([#56](https://github.com/danielsimonjr/ironclaw/pull/56))
+
 ## [0.1.22](https://github.com/danielsimonjr/ironclaw/compare/v0.1.21...v0.1.22) - 2026-08-21
 
 ### Fixed
