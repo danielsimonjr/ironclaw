@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25](https://github.com/danielsimonjr/ironclaw/compare/v0.1.24...v0.1.25) - 2026-08-25
+
+### Other
+
+- *(release-plz)* stop the release automation feeding itself
+
 ## [0.1.24](https://github.com/danielsimonjr/ironclaw/compare/v0.1.23...v0.1.24) - 2026-08-24
 
 ### Other
