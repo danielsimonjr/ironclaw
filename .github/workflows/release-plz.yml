@@ -75,8 +75,22 @@ jobs:
   # changelog was the whole project history: 0 commits since v0.1.21, 182 lines of
   # already-shipped entries. CHANGELOG.md had accumulated 9 such full-history dumps
   # across 23 version sections before this was caught.
+  # DO NOT open a release PR on release-plz's OWN merge commit, or the automation
+  # feeds itself: merging a release PR pushes to main, that push triggers this
+  # workflow, and this job then opens a release PR for the release commit. Each
+  # merge produced the next PR about three minutes later --
+  #   #58 merged 23:52:39Z -> #59 opened 23:55:44Z
+  #   #59 merged 04:41:05Z -> #60 opened 04:44:24Z
+  # and #59 shipped v0.1.24 containing nothing but the v0.1.23 release commit.
+  # `git compare v0.1.24...main` returned status=identical, total_commits=0.
+  #
+  # The guard is on THIS job only. release-plz-release must still run on a release
+  # commit, because that is the run which creates the version tag -- guarding the
+  # whole workflow would stop the tagging and break the release instead of the loop.
   release-plz-pr:
-    if: ${{ github.repository_owner == 'danielsimonjr' }}
+    if: >-
+      ${{ github.repository_owner == 'danielsimonjr'
+          && !startsWith(github.event.head_commit.message, 'chore: release') }}
     name: Release-plz PR
     needs: release-plz-release
     runs-on: ubuntu-latest
