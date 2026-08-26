@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26](https://github.com/danielsimonjr/ironclaw/compare/v0.1.25...v0.1.26) - 2026-08-26
+
+### Other
+
+- *(deps)* bump wasmtime-wasi from 36.0.10 to 36.0.11 ([#62](https://github.com/danielsimonjr/ironclaw/pull/62))
+
 ## [0.1.25](https://github.com/danielsimonjr/ironclaw/compare/v0.1.24...v0.1.25) - 2026-08-25
 
 ### Other
