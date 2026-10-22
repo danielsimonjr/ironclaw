@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/danielsimonjr/ironclaw/compare/v0.1.26...v0.2.0) - 2026-10-22
+
+### Fixed
+
+- *(lint)* clear the clippy errors of Rust 1.99 ([#65](https://github.com/danielsimonjr/ironclaw/pull/65))
+
+### Other
+
+- *(deps)* bump wasmtime-wasi from 36.0.11 to 36.0.12 ([#64](https://github.com/danielsimonjr/ironclaw/pull/64))
+- *(deps)* bump rustls from 0.23.36 to 0.23.46 ([#66](https://github.com/danielsimonjr/ironclaw/pull/66))
+
 ## [0.1.26](https://github.com/danielsimonjr/ironclaw/compare/v0.1.25...v0.1.26) - 2026-08-26
 
 ### Other
