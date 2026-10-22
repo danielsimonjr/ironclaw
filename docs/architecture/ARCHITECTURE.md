@@ -649,7 +649,7 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 288 | dependency-graph.json |
-| totalLinesOfCode | 141031 | dependency-graph.json |
+| totalLinesOfCode | 141037 | dependency-graph.json |
 | entryRoots | 14 | dependency-graph.json |
 
 **Claims that the gate cannot hold.** The module list, the trait table and the startup

@@ -20,13 +20,13 @@ removed, the tool read this repository as JavaScript and reported **118 source f
 
 | Area | Files | Lines |
 |---|---|---|
-| `src/` | 247 | 125,262 |
+| `src/` | 247 | 125,268 |
 | `tools-src/` | 30 | 9,603 |
 | `tests/` | 6 | 3,566 |
 | `channels-src/` | 3 | 2,372 |
 | `examples/` | 1 | 122 |
 | `build.rs` | 1 | 106 |
-| **Total** | **288** | **141,031** |
+| **Total** | **288** | **141,037** |
 
 ## By disposition
 
@@ -74,7 +74,7 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 |---|---|---|
 | totalFiles | 288 | file-inventory.json |
 | totalSourceFiles | 288 | dependency-graph.json |
-| totalLinesOfCode | 141031 | dependency-graph.json |
+| totalLinesOfCode | 141037 | dependency-graph.json |
 | orphanedFiles | 3 | dependency-graph.json |
 | entryRoots | 14 | dependency-graph.json |
 
