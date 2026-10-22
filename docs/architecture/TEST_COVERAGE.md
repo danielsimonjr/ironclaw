@@ -318,7 +318,7 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 288 | dependency-graph.json |
-| totalLinesOfCode | 141031 | dependency-graph.json |
+| totalLinesOfCode | 141037 | dependency-graph.json |
 
 **Claims that the gate cannot hold.** Every coverage statement comes from a reading of the
 test files. No line-coverage instrumentation is configured, so this document reports coverage

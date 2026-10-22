@@ -58,6 +58,9 @@ impl SseManager {
         // concurrent callers from overshooting max_connections.
         let counter = Arc::clone(&self.connection_count);
         let max = self.max_connections;
+        // `fetch_update` is deprecated since Rust 1.99 in favour of `try_update`, which
+        // is stable only from Rust 1.95. The `rust-version` in Cargo.toml is lower.
+        #[allow(deprecated)]
         counter
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 if current < max {
@@ -86,6 +89,9 @@ impl SseManager {
         // Atomically increment only if below the limit.
         let counter = Arc::clone(&self.connection_count);
         let max = self.max_connections;
+        // `fetch_update` is deprecated since Rust 1.99 in favour of `try_update`, which
+        // is stable only from Rust 1.95. The `rust-version` in Cargo.toml is lower.
+        #[allow(deprecated)]
         counter
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 if current < max {

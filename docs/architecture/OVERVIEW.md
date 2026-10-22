@@ -17,7 +17,7 @@ The repository is a Cargo **workspace**. Each member is its own crate with its o
 
 ## The numbers
 
-288 source files, 141,031 lines, 2,739 public items, **14 crate roots**, 205 names that more
+288 source files, 141,037 lines, 2,739 public items, **14 crate roots**, 205 names that more
 than one crate defines.
 
 **14 crate roots is correct. That number is not an error.** A Cargo workspace holds one root for
@@ -49,7 +49,7 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 288 | dependency-graph.json |
-| totalLinesOfCode | 141031 | dependency-graph.json |
+| totalLinesOfCode | 141037 | dependency-graph.json |
 | totalExports | 2739 | dependency-graph.json |
 | entryRoots | 14 | dependency-graph.json |
 | orphanedFiles | 3 | dependency-graph.json |
